@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="cs">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#143b2b">
+  <title>Waymint Web</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <a class="brand" href="#/">
+        <span class="brand-mark">WM</span>
+        <span><strong>Waymint</strong><small>webový plánovač</small></span>
+      </a>
+      <nav>
+        <button class="nav-button active" data-action="home"><span>⌂</span>Přehled</button>
+        <button class="nav-button" data-action="import"><span>⇩</span>Importovat</button>
+      </nav>
+      <div class="sidebar-bottom">
+        <p>Všechna data zůstávají jen v tomto prohlížeči.</p>
+        <button class="button ghost full" data-action="export-library">Export knihovny</button>
+      </div>
+    </aside>
+
+    <main>
+      <header class="topbar">
+        <button class="mobile-brand" data-action="toggle-menu">WM</button>
+        <div class="search-wrap"><span>⌕</span><input id="search" type="search" placeholder="Hledat město nebo cestu…"></div>
+        <button class="icon-button" data-action="toggle-theme" aria-label="Přepnout motiv">◐</button>
+        <button id="primary-action" class="button primary" data-action="new-city">＋ Přidat město</button>
+      </header>
+      <div id="view" class="view" aria-live="polite"></div>
+    </main>
+  </div>
+
+  <input id="file-input" type="file" accept=".way,.waymint,.json,application/json" hidden multiple>
+  <div id="modal-root"></div>
+  <div id="toast" class="toast" role="status"></div>
+  <script src="app.js"></script>
+</body>
+</html>

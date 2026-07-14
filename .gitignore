@@ -1,0 +1,27 @@
+# Xcode user-specific settings
+xcuserdata/
+*.xcuserstate
+
+# Build products and derived data
+build/
+DerivedData/
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# Swift Package Manager
+.build/
+.swiftpm/
+Package.resolved
+
+# Local configuration and secrets
+.env
+.env.*
+*.xcconfig.local
+Secrets.xcconfig
+*.p12
+*.mobileprovision
+
+# macOS
+.DS_Store
+
