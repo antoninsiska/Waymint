@@ -1,0 +1,39 @@
+name: Build Waymint
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build iOS application
+    runs-on: macos-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Show Xcode version
+        run: xcodebuild -version
+
+      - name: Show project configuration
+        run: xcodebuild -project Waymint.xcodeproj -list
+
+      - name: Build Waymint
+        run: |
+          set -o pipefail
+
+          xcodebuild \
+            -project Waymint.xcodeproj \
+            -scheme Waymint \
+            -configuration Debug \
+            -destination "generic/platform=iOS Simulator" \
+            CODE_SIGNING_ALLOWED=NO \
+            clean build
