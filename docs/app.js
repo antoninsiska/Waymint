@@ -11,6 +11,7 @@
   const slug = value => String(value || "export").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9]+/g, "-").replace(/^-|-$/g, "") || "export";
   const fmtDate = value => new Intl.DateTimeFormat("cs-CZ", {day:"numeric", month:"long", year:"numeric"}).format(new Date(value));
   const fmtTime = value => new Intl.DateTimeFormat("cs-CZ", {hour:"2-digit", minute:"2-digit"}).format(new Date(value));
+  const inputTime = value => { const date = new Date(value); return `${String(date.getHours()).padStart(2,"0")}:${String(date.getMinutes()).padStart(2,"0")}`; };
   const shortMonth = value => new Intl.DateTimeFormat("cs-CZ", {month:"short"}).format(new Date(value)).replace(".", "");
   const minutes = n => n < 60 ? `${n} min` : `${Math.floor(n/60)} h${n%60 ? ` ${n%60} min` : ""}`;
 
@@ -42,6 +43,7 @@
   }
   function cityById(id) { return library.find(city => city.id === id); }
   function tripById(city, id) { return city?.trips?.find(trip => trip.id === id); }
+  function stopById(trip, id) { return trip?.stops?.find(stop => stop.id === id); }
   function tripDuration(trip) {
     const stops = [...(trip.stops || [])].sort((a,b) => a.sortIndex-b.sortIndex);
     return stops.length > 1 ? Math.max(0, Math.round((new Date(stops.at(-1).plannedDeparture)-new Date(stops[0].plannedArrival))/60000)) : 0;
@@ -118,14 +120,14 @@
       <section class="detail-head"><div><span class="eyebrow">${fmtDate(trip.date)} · ${esc(city.name)}</span><h1>${esc(trip.title)}</h1><p>${timeRange(trip)} · ${stops.length} zastávek · ${minutes(tripDuration(trip))}</p></div><div class="actions"><button class="button primary" data-action="new-stop" data-city="${city.id}" data-trip="${trip.id}">＋ Zastávka</button><button class="button" data-action="export-trip" data-city="${city.id}" data-trip="${trip.id}">⇧ Export .way</button><button class="button danger" data-action="delete-trip" data-city="${city.id}" data-trip="${trip.id}">Smazat</button></div></section>
       ${trip.landingTitle || trip.landingSubtitle ? `<div class="stat" style="margin-top:24px"><strong style="font-size:18px">${esc(trip.landingTitle)}</strong><span>${esc(trip.landingSubtitle)}</span></div>` : ""}
       <div class="section-head"><div><h2>Časová osa</h2><p>${trip.hasFixedStartTime === false ? "Trasa bez pevného začátku" : "Přehled dne krok za krokem"}</p></div></div>
-      ${stops.length ? `<section class="timeline">${stops.map((s,i)=>stopCard(s,i,trip)).join("")}</section>` : emptyState("Časová osa je prázdná", "Přidej první zastávku a nastav čas příchodu a odchodu.", `<button class="button primary" data-action="new-stop" data-city="${city.id}" data-trip="${trip.id}">Přidat zastávku</button>`)}`;
+      ${stops.length ? `<section class="timeline">${stops.map((s,i)=>stopCard(s,i,city,trip)).join("")}</section>` : emptyState("Časová osa je prázdná", "Přidej první zastávku a nastav čas příchodu a odchodu.", `<button class="button primary" data-action="new-stop" data-city="${city.id}" data-trip="${trip.id}">Přidat zastávku</button>`)}`;
   }
 
-  function stopCard(stop, index, trip) {
+  function stopCard(stop, index, city, trip) {
     const segment = (trip.travelSegments || []).find(s => s.toStopID === stop.id);
     const distance = segment?.plannedDistanceMeters ? ` · ${segment.plannedDistanceMeters >= 1000 ? `${(segment.plannedDistanceMeters/1000).toFixed(1)} km` : `${segment.plannedDistanceMeters} m`}` : "";
     const travel = index && segment ? `<div class="segment">${transportTitle(segment.transportMode)} · ${minutes((segment.plannedDurationMinutes||0)+(segment.bufferMinutes||0))}${distance}${segment.bufferMinutes ? " včetně rezervy" : ""}${segment.note === "Orientační odhad" ? " · orientačně" : ""}</div>` : "";
-    return `${travel}<article class="stop"><div class="rail"><div class="dot">${index ? index+1 : "⚑"}</div><div class="line"></div></div><div class="stop-card"><div class="stop-top"><div><span class="stop-time">${trip.hasFixedStartTime === false ? (index ? `Bod ${index+1}` : "Start") : `${fmtTime(stop.plannedArrival)}–${fmtTime(stop.plannedDeparture)}`}</span><h3>${esc(stop.title)}</h3><p>${esc(stop.address || stop.mainReason || typeTitle(stop.type))}</p></div><span class="pill">${stop.isRequired === false ? "Volitelná" : index ? stopStatusTitle(stop.status) : "Start"}</span></div></div></article>`;
+    return `${travel}<article class="stop"><div class="rail"><div class="dot">${index ? index+1 : "⚑"}</div><div class="line"></div></div><div class="stop-card"><div class="stop-top"><div><span class="stop-time">${trip.hasFixedStartTime === false ? (index ? `Bod ${index+1}` : "Start") : `${fmtTime(stop.plannedArrival)}–${fmtTime(stop.plannedDeparture)}`}</span><h3>${esc(stop.title)}</h3><p>${esc(stop.address || stop.mainReason || typeTitle(stop.type))}</p></div><div class="stop-actions"><span class="pill">${stop.isRequired === false ? "Volitelná" : index ? stopStatusTitle(stop.status) : "Start"}</span><button class="button" type="button" data-action="edit-stop" data-city="${city.id}" data-trip="${trip.id}" data-stop="${stop.id}">Upravit</button></div></div></div></article>`;
   }
 
   function emptyState(title, text, action = `<button class="button primary" data-action="new-city">Přidat město</button>`) {
@@ -155,20 +157,39 @@
       city.updatedAt=now(); save(); toast("Cesta byla přidána.");
     });
   }
-  function stopModal(city, trip) {
+  function stopModal(city, trip, existingStop = null) {
     const date = new Date(trip.date).toISOString().slice(0,10);
+    const isEditing = Boolean(existingStop);
+    const sortedStops = [...(trip.stops || [])].sort((a,b)=>a.sortIndex-b.sortIndex);
+    const stopIndex = isEditing ? sortedStops.findIndex(stop => stop.id === existingStop.id) : sortedStops.length;
+    const previous = stopIndex > 0 ? sortedStops[stopIndex-1] : null;
+    const incomingSegment = previous ? (trip.travelSegments || []).find(segment => segment.toStopID === existingStop?.id) : null;
+    const address = existingStop?.address || "";
+    const typeOptions = [["sight","Památka"],["museum","Muzeum"],["restaurant","Restaurace"],["cafe","Kavárna"],["park","Park"],["hotel","Hotel"],["custom","Vlastní bod"]];
+    const transportOptions = [["walking","Pěšky"],["publicTransport","MHD"],["car","Auto"],["bike","Kolo"]];
+    const options = (items, selected) => items.map(([value,label]) => `<option value="${value}" ${value === selected ? "selected" : ""}>${label}</option>`).join("");
     addressResults = [];
-    openModal("Nová zastávka", `<div class="form-grid">${field("title","Název místa","","text",true,"required")}${field("arrival","Příchod","10:00","time",false,"required")}${field("departure","Odchod","11:00","time",false,"required")}<div class="field full"><label for="address-query">Vyhledat adresu nebo místo</label><div class="address-search"><input id="address-query" type="search" autocomplete="off" placeholder="Začni psát, např. Pražský hrad"><span class="search-spinner" aria-hidden="true"></span></div><input id="address" name="address" type="hidden"><input id="latitude" name="latitude" type="hidden"><input id="longitude" name="longitude" type="hidden"><div id="address-results" class="address-results"></div><div id="address-status" class="search-status">Návrhy se zobrazí po zadání alespoň tří znaků.</div><div id="map-preview" class="map-preview" hidden></div><div class="address-credit">Vyhledávání Photon · data © OpenStreetMap contributors</div></div>${field("mainReason","Hlavní důvod návštěvy","","text",true)}<div class="field"><label for="type">Typ</label><select name="type" id="type"><option value="sight">Památka</option><option value="museum">Muzeum</option><option value="restaurant">Restaurace</option><option value="cafe">Kavárna</option><option value="park">Park</option><option value="hotel">Hotel</option><option value="custom">Vlastní bod</option></select></div><div class="field"><label for="transportMode">Přesun z předchozího bodu</label><select name="transportMode" id="transportMode"><option value="walking">Pěšky</option><option value="publicTransport">MHD</option><option value="car">Auto</option><option value="bike">Kolo</option></select><span class="search-status">Délka přesunu se spočítá automaticky.</span></div></div>`, async data => {
+    openModal(isEditing ? "Upravit zastávku" : "Nová zastávka", `<div class="form-grid">${field("title","Název místa",existingStop?.title||"","text",true,"required")}${field("arrival","Příchod",existingStop ? inputTime(existingStop.plannedArrival) : "10:00","time",false,"required")}${field("departure","Odchod",existingStop ? inputTime(existingStop.plannedDeparture) : "11:00","time",false,"required")}<div class="field full"><label for="address-query">Vyhledat adresu nebo místo</label><div class="address-search"><input id="address-query" type="search" autocomplete="off" value="${esc(address)}" data-selected-address="${esc(address)}" placeholder="Začni psát, např. Pražský hrad"><span class="search-spinner" aria-hidden="true"></span></div><input id="address" name="address" type="hidden" value="${esc(address)}"><input id="latitude" name="latitude" type="hidden" value="${existingStop?.latitude ?? ""}"><input id="longitude" name="longitude" type="hidden" value="${existingStop?.longitude ?? ""}"><div id="address-results" class="address-results"></div><div id="address-status" class="search-status">${address ? `Aktuální adresa: ${esc(address)}` : "Návrhy se zobrazí po zadání alespoň tří znaků."}</div><div id="map-preview" class="map-preview" hidden></div><div class="address-credit">Vyhledávání Photon · data © OpenStreetMap contributors</div></div>${field("mainReason","Hlavní důvod návštěvy",existingStop?.mainReason||"","text",true)}<div class="field"><label for="type">Typ</label><select name="type" id="type">${options(typeOptions, existingStop?.type || "sight")}</select></div><div class="field"><label for="transportMode">Přesun z předchozího bodu</label><select name="transportMode" id="transportMode" ${previous ? "" : "disabled"}>${options(transportOptions, incomingSegment?.transportMode || "walking")}</select><span class="search-status">${previous ? "Délka přesunu se spočítá automaticky." : "První zastávka nemá předchozí přesun."}</span></div></div>`, async data => {
       const arrival = new Date(`${date}T${data.get("arrival")}:00`).toISOString(), departure = new Date(`${date}T${data.get("departure")}:00`).toISOString();
-      const previous = [...(trip.stops||[])].sort((a,b)=>a.sortIndex-b.sortIndex).at(-1);
-      const stop = {id:uid(),title:data.get("title"),type:data.get("type"),status:"planned",plannedArrival:arrival,plannedDeparture:departure,plannedVisitDurationMinutes:Math.max(0,Math.round((new Date(departure)-new Date(arrival))/60000)),address:data.get("address"),latitude:data.get("latitude") ? Number(data.get("latitude")) : null,longitude:data.get("longitude") ? Number(data.get("longitude")) : null,note:"",mainReason:data.get("mainReason"),isRequired:true,sortIndex:trip.stops?.length||0,checklist:[],tickets:[]};
-      trip.stops ||= []; trip.stops.push(stop);
+      const values = {title:data.get("title"),type:data.get("type"),plannedArrival:arrival,plannedDeparture:departure,plannedVisitDurationMinutes:Math.max(0,Math.round((new Date(departure)-new Date(arrival))/60000)),address:data.get("address"),latitude:data.get("latitude") ? Number(data.get("latitude")) : null,longitude:data.get("longitude") ? Number(data.get("longitude")) : null,mainReason:data.get("mainReason")};
+      const stop = existingStop || {id:uid(),status:"planned",note:"",isRequired:true,sortIndex:trip.stops?.length||0,checklist:[],tickets:[]};
+      Object.assign(stop, values);
+      if (!isEditing) { trip.stops ||= []; trip.stops.push(stop); }
       if(previous){
         const transportMode = data.get("transportMode") || "walking";
         const route = await calculateTransfer(previous, stop, transportMode);
-        trip.travelSegments ||= [];trip.travelSegments.push({id:uid(),transportMode,plannedDurationMinutes:route.minutes,plannedDistanceMeters:route.distance,plannedDeparture:previous.plannedDeparture,bufferMinutes:0,fromStopID:previous.id,toStopID:stop.id,note:route.estimated ? "Orientační odhad" : "Automaticky spočítáno podle mapy",sortIndex:trip.travelSegments.length});
+        trip.travelSegments ||= [];
+        const segment = incomingSegment || {id:uid(),bufferMinutes:0,fromStopID:previous.id,toStopID:stop.id,sortIndex:trip.travelSegments.length};
+        Object.assign(segment,{transportMode,plannedDurationMinutes:route.minutes,plannedDistanceMeters:route.distance,plannedDeparture:previous.plannedDeparture,note:route.estimated ? "Orientační odhad" : "Automaticky spočítáno podle mapy"});
+        if (!incomingSegment) trip.travelSegments.push(segment);
       }
-      save(); toast("Zastávka byla přidána.");
+      const next = sortedStops[stopIndex+1];
+      const outgoingSegment = next ? (trip.travelSegments || []).find(segment => segment.fromStopID === stop.id && segment.toStopID === next.id) : null;
+      if (next && outgoingSegment) {
+        const route = await calculateTransfer(stop, next, outgoingSegment.transportMode);
+        Object.assign(outgoingSegment,{plannedDurationMinutes:route.minutes,plannedDistanceMeters:route.distance,plannedDeparture:stop.plannedDeparture,note:route.estimated ? "Orientační odhad" : "Automaticky spočítáno podle mapy"});
+      }
+      city.updatedAt = now(); save(); toast(isEditing ? "Zastávka byla upravena." : "Zastávka byla přidána.");
     });
   }
 
@@ -278,7 +299,7 @@
   document.addEventListener("click", e => {
     const target = e.target.closest("[data-action],[data-href]"); if (!target) return;
     if (target.dataset.href) { location.hash=target.dataset.href; return; }
-    const action=target.dataset.action, city=cityById(target.dataset.city), trip=tripById(city,target.dataset.trip);
+    const action=target.dataset.action, city=cityById(target.dataset.city), trip=tripById(city,target.dataset.trip), stop=stopById(trip,target.dataset.stop);
     if(action==="home") location.hash="#/";
     if(action==="toggle-menu") $(".sidebar").classList.toggle("open");
     if(action==="toggle-theme"){const dark=document.documentElement.dataset.theme!=="dark";document.documentElement.dataset.theme=dark?"dark":"";localStorage.setItem("waymint.theme",dark?"dark":"light");}
@@ -287,6 +308,7 @@
     if(action==="edit-city") cityModal(city);
     if(action==="new-trip") tripModal(city);
     if(action==="new-stop") stopModal(city,trip);
+    if(action==="edit-stop") stopModal(city,trip,stop);
     if(action==="choose-address") chooseAddress(Number(target.dataset.index));
     if(action==="close-modal") closeModal();
     if(action==="export-trip") exportTrip(city,trip);
@@ -295,7 +317,7 @@
     if(action==="delete-city" && confirm(`Opravdu smazat město ${city.name}?`)){library=library.filter(c=>c.id!==city.id);save();location.hash="#/";}
     if(action==="delete-trip" && confirm(`Opravdu smazat cestu ${trip.title}?`)){city.trips=city.trips.filter(t=>t.id!==trip.id);save();location.hash=`#/city/${city.id}`;}
   });
-  document.addEventListener("input", e => { if(e.target.id === "address-query") scheduleAddressSearch(e.target.closest(".modal")?.querySelector("[data-city-name]")?.dataset.cityName || currentCityName()); });
+  document.addEventListener("input", e => { if(e.target.id === "address-query") { if (e.target.value !== e.target.dataset.selectedAddress) { $("#address").value=""; $("#latitude").value=""; $("#longitude").value=""; } scheduleAddressSearch(e.target.closest(".modal")?.querySelector("[data-city-name]")?.dataset.cityName || currentCityName()); } });
   document.addEventListener("keydown", e => { const el=e.target.closest("[data-href]"); if(el && (e.key==="Enter"||e.key===" ")) location.hash=el.dataset.href; if(e.key==="Escape") closeModal(); });
   $("#search").addEventListener("input", e => { search=e.target.value; if(location.hash!=="#/") location.hash="#/"; else renderHome(); });
   $("#file-input").addEventListener("change", e => importFiles([...e.target.files]));
