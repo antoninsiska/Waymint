@@ -4,10 +4,138 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#143b2b">
-  <title>Waymint Web</title>
+  <meta name="description" content="Waymint je klidný cestovní plánovač pro promyšlené výlety. Vyzkoušej webovou aplikaci ještě dnes.">
+  <title>Waymint — cesta začíná plánem</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+  <section class="landing" id="landing" aria-labelledby="landing-title">
+    <div class="landing-glow glow-one"></div>
+    <div class="landing-glow glow-two"></div>
+    <nav class="landing-nav" aria-label="Hlavní navigace">
+      <a class="landing-brand" href="#landing" aria-label="Waymint — úvodní stránka">
+        <span class="landing-logo">W</span>
+        <span>Waymint</span>
+      </a>
+      <button class="landing-nav-cta" type="button" data-action="enter-app">Vstup do aplikace <span>↗</span></button>
+    </nav>
+
+    <div class="landing-hero">
+      <div class="landing-copy">
+        <div class="landing-kicker reveal"><span class="pulse-dot"></span> Cestovní plánovač nové generace</div>
+        <h1 id="landing-title" class="reveal delay-one">Méně plánování.<br><em>Více zážitků.</em></h1>
+        <p class="landing-lead reveal delay-two">Města, trasy, zastávky i vstupenky na jednom klidném místě. Waymint promění chaos před cestou v itinerář, na který se můžeš těšit.</p>
+        <div class="landing-actions reveal delay-three">
+          <button class="landing-primary" type="button" data-action="enter-app">Vstup do aplikace <span>→</span></button>
+          <a class="landing-secondary" href="#features">Prozkoumat Waymint</a>
+        </div>
+        <div class="app-store-note reveal delay-three">
+          <span class="apple-mark" aria-hidden="true">●</span>
+          <span><strong>Waymint míří do App Storu</strong><small>iOS aplikace bude dostupná v budoucnu.</small></span>
+        </div>
+      </div>
+
+      <div class="landing-visual reveal delay-two" aria-label="Ukázka cestovního plánu v aplikaci Waymint">
+        <div class="orbit orbit-one"></div><div class="orbit orbit-two"></div>
+        <div class="phone-card">
+          <div class="phone-top"><span>9:41</span><i></i><span>•••</span></div>
+          <div class="phone-content">
+            <div class="phone-greeting"><small>Dobré ráno</small><strong>Kam vyrazíme?</strong></div>
+            <div class="mini-map">
+              <svg viewBox="0 0 320 190" role="img" aria-label="Stylizovaná mapa trasy">
+                <path class="map-land" d="M-10 25C45 4 86 32 126 24s79-34 124-12 84 51 66 91-50 72-105 58-75 32-122 21-80-31-99-70S-42 42-10 25Z"/>
+                <path class="route-line" d="M38 137C74 124 82 69 127 81s59 62 102 37 31-55 58-65"/>
+                <circle cx="38" cy="137" r="7"/><circle cx="127" cy="81" r="7"/><circle cx="229" cy="118" r="7"/><circle cx="287" cy="53" r="9"/>
+              </svg>
+              <span class="map-label">Praha · sobota</span>
+            </div>
+            <div class="today-label"><strong>Dnešní cesta</strong><span>4 zastávky</span></div>
+            <div class="timeline-preview">
+              <div><b>09:00</b><i></i><span><strong>Pražský hrad</strong><small>Začni den s výhledem</small></span></div>
+              <div><b>11:30</b><i></i><span><strong>Malá Strana</strong><small>12 min pěšky</small></span></div>
+              <div><b>14:00</b><i></i><span><strong>Staré Město</strong><small>Káva a objevování</small></span></div>
+            </div>
+          </div>
+        </div>
+        <div class="floating-card float-time"><span>◷</span><div><strong>Všechno včas</strong><small>Chytrý itinerář</small></div></div>
+        <div class="floating-card float-ready"><span>✓</span><div><strong>Trasa připravena</strong><small>Bez stresu</small></div></div>
+      </div>
+    </div>
+
+    <div class="landing-features" id="features">
+      <article><span>01</span><h2>Plánuj přehledně</h2><p>Všechny zastávky, časy a přesuny v jedné časové ose.</p></article>
+      <article><span>02</span><h2>Cestuj po svém</h2><p>Data zůstávají u tebe a plán funguje přímo v prohlížeči.</p></article>
+      <article><span>03</span><h2>Měj klid na cestě</h2><p>Importuj plán, vezmi ho s sebou a soustřeď se na zážitky.</p></article>
+    </div>
+
+    <section class="story-section">
+      <div class="section-intro scroll-reveal">
+        <span class="section-number">01 — Itinerář</span>
+        <h2>Celý den.<br><em>Jeden jasný plán.</em></h2>
+        <p>Waymint skládá jednotlivá místa do přehledné cesty a hlídá, aby na sebe všechno přirozeně navazovalo.</p>
+      </div>
+      <div class="route-showcase scroll-reveal">
+        <div class="route-topline"><span>SOBOTA · PRAHA</span><span>4 MÍSTA · 6,2 KM</span></div>
+        <div class="animated-route">
+          <div class="route-progress"></div>
+          <article><time>09:00</time><i><b>1</b></i><div><small>Začátek dne</small><strong>Pražský hrad</strong><span>Výhled · 90 min</span></div></article>
+          <article><time>11:10</time><i><b>2</b></i><div><small>12 min pěšky</small><strong>Kampa</strong><span>Procházka · 45 min</span></div></article>
+          <article><time>13:00</time><i><b>3</b></i><div><small>8 min tramvají</small><strong>Café Savoy</strong><span>Oběd · rezervace</span></div></article>
+          <article><time>15:30</time><i><b>4</b></i><div><small>18 min pěšky</small><strong>Staré Město</strong><span>Volný program</span></div></article>
+        </div>
+        <div class="route-summary"><div><strong>6 h 30 min</strong><span>celkový plán</span></div><div><strong>38 min</strong><span>na přesunech</span></div><div><strong>4</strong><span>zážitky</span></div></div>
+      </div>
+    </section>
+
+    <section class="feature-stage">
+      <div class="feature-stage-head scroll-reveal">
+        <span class="section-number light">02 — Všechno po ruce</span>
+        <h2>Detaily, které drží<br>cestu pohromadě.</h2>
+      </div>
+      <div class="feature-bento">
+        <article class="bento-card bento-map scroll-reveal">
+          <div class="bento-copy"><span class="bento-icon">⌖</span><h3>Místa rovnou na mapě</h3><p>Adresy, pořadí zastávek a vzdálenosti vidíš dřív, než vyrazíš.</p></div>
+          <div class="map-animation" aria-hidden="true"><span class="map-road road-a"></span><span class="map-road road-b"></span><i class="pin pin-a">1</i><i class="pin pin-b">2</i><i class="pin pin-c">3</i><svg viewBox="0 0 400 180"><path d="M34 145C82 141 79 60 143 74s66 58 120 27 61-43 106-62"/></svg></div>
+        </article>
+        <article class="bento-card bento-ticket scroll-reveal delay-card">
+          <div class="bento-copy"><span class="bento-icon">▱</span><h3>Vstupenky bez hledání</h3><p>Rezervace a důležité soubory zůstávají u konkrétní cesty.</p></div>
+          <div class="ticket-stack" aria-hidden="true"><div class="ticket ticket-back"></div><div class="ticket"><span>WAYMINT PASS</span><strong>PRG → VIE</strong><small>18 JUL · 08:42</small><i></i></div></div>
+        </article>
+        <article class="bento-card bento-check scroll-reveal">
+          <div class="bento-copy"><span class="bento-icon">✓</span><h3>Nic důležitého nezapadne</h3><p>Checklist u každé zastávky ti připomene rezervaci, doklady i drobnosti.</p></div>
+          <div class="check-preview" aria-hidden="true"><div><i>✓</i><span>Stáhnout vstupenky</span></div><div><i>✓</i><span>Rezervovat stůl</span></div><div><i></i><span>Přibalit fotoaparát</span></div></div>
+        </article>
+        <article class="bento-card bento-sync scroll-reveal delay-card">
+          <div class="bento-copy"><span class="bento-icon">↗</span><h3>Přenes si plán</h3><p>Exportuj celou knihovnu nebo jednu cestu a otevři ji na dalším zařízení.</p></div>
+          <div class="sync-preview" aria-hidden="true"><div class="sync-file">W</div><span></span><div class="sync-device">◒</div></div>
+        </article>
+      </div>
+    </section>
+
+    <section class="privacy-section scroll-reveal">
+      <div class="privacy-orbit" aria-hidden="true"><span></span><i>W</i><b></b></div>
+      <div class="privacy-copy">
+        <span class="section-number">03 — Tvoje data</span>
+        <h2>Tvůj plán zůstává<br><em>opravdu tvůj.</em></h2>
+        <p>Webový Waymint funguje bez účtu a bez backendu. Cestovní plány ukládá přímo v tomto prohlížeči.</p>
+        <div class="privacy-pills"><span>Bez registrace</span><span>Lokální uložení</span><span>Snadný export</span></div>
+      </div>
+    </section>
+
+    <section class="future-section scroll-reveal">
+      <div class="future-copy">
+        <span class="section-number light">Brzy na iPhonu</span>
+        <h2>Cesty budou ještě blíž.</h2>
+        <p>Waymint připravujeme také jako nativní aplikaci pro iPhone. V budoucnu ji najdeš v App Storu.</p>
+        <button class="future-button" type="button" data-action="enter-app">Vyzkoušet webovou aplikaci <span>→</span></button>
+      </div>
+      <div class="future-phone" aria-hidden="true"><div class="future-island"></div><span class="future-w">W</span><strong>Waymint</strong><small>Brzy v App Storu</small><div class="future-shine"></div></div>
+    </section>
+
+    <footer class="landing-footer"><a class="landing-brand" href="#landing"><span class="landing-logo">W</span><span>Waymint</span></a><p>Klidnější cesta začíná dobrým plánem.</p><button type="button" data-action="enter-app">Otevřít aplikaci ↗</button></footer>
+    <button class="landing-scroll" type="button" aria-label="Přejít k výhodám" onclick="document.querySelector('#features').scrollIntoView({behavior:'smooth'})"><span></span>Objev Waymint</button>
+  </section>
+
   <div class="app-shell">
     <aside class="sidebar">
       <a class="brand" href="#/">
