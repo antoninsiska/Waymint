@@ -72,6 +72,12 @@
     renderHome();
   }
 
+  function showLanding() {
+    sessionStorage.removeItem("waymint.app.entered");
+    document.body.classList.remove("app-entered");
+    window.scrollTo({top:0, behavior:"smooth"});
+  }
+
   function setPrimaryAction(action, label, data = {}) {
     const button = $("#primary-action");
     button.dataset.action = action;
@@ -307,6 +313,7 @@
     if (target.dataset.href) { location.hash=target.dataset.href; return; }
     const action=target.dataset.action, city=cityById(target.dataset.city), trip=tripById(city,target.dataset.trip), stop=stopById(trip,target.dataset.stop);
     if(action==="enter-app") { document.body.classList.add("app-entered"); sessionStorage.setItem("waymint.app.entered","true"); location.hash="#/"; window.scrollTo({top:0,behavior:"smooth"}); }
+    if(action==="show-landing") { e.preventDefault(); showLanding(); location.hash="#landing"; }
     if(action==="home") location.hash="#/";
     if(action==="toggle-menu") $(".sidebar").classList.toggle("open");
     if(action==="toggle-theme"){const dark=document.documentElement.dataset.theme!=="dark";document.documentElement.dataset.theme=dark?"dark":"";localStorage.setItem("waymint.theme",dark?"dark":"light");}
@@ -331,9 +338,10 @@
   $("#search").addEventListener("input", e => { search=e.target.value; if(location.hash!=="#/") location.hash="#/"; else renderHome(); });
   $("#file-input").addEventListener("change", e => importFiles([...e.target.files]));
   function currentCityName(){const parts=(location.hash||"").slice(2).split("/");return cityById(parts[1])?.name||"";}
-  window.addEventListener("hashchange", render);
+  window.addEventListener("hashchange", () => location.hash === "#landing" ? showLanding() : render());
   document.documentElement.dataset.theme = localStorage.getItem("waymint.theme") === "dark" ? "dark" : "";
-  if (sessionStorage.getItem("waymint.app.entered") === "true" || /^#\/(city|trip)\//.test(location.hash)) document.body.classList.add("app-entered");
+  if (location.hash === "#landing") showLanding();
+  else if (sessionStorage.getItem("waymint.app.entered") === "true" || /^#\/(city|trip)\//.test(location.hash)) document.body.classList.add("app-entered");
   const revealObserver = new IntersectionObserver(entries => entries.forEach(entry => {
     if (entry.isIntersecting) { entry.target.classList.add("is-visible"); revealObserver.unobserve(entry.target); }
   }), {threshold:.16});
