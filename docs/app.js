@@ -2,7 +2,7 @@
   "use strict";
 
   const STORAGE_KEY = "waymint.web.library.v1";
-  const BRAND = { appName: "Waymint", logoText: "WM", fileExtension: ".way", primaryColorHex: "#247A53", darkRouteColorHex: "#0A281C", description: "Waymint route export. The file is JSON with a custom .way extension." };
+  const BRAND = { appName: "Waymint", logoText: "W", fileExtension: ".way", primaryColorHex: "#247A53", darkRouteColorHex: "#0A281C", description: "Waymint route export. The file is JSON with a custom .way extension." };
   const $ = (selector, root = document) => root.querySelector(selector);
   const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
   const uid = () => crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
