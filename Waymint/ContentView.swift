@@ -80,29 +80,14 @@ private struct WaymintLogoMark: View {
     let size: CGFloat
 
     var body: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: size * 0.28)
-                .fill(
-                    LinearGradient(
-                        colors: [WaymintTheme.darkGreen, WaymintTheme.primaryGreen],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-                .shadow(color: WaymintTheme.primaryGreen.opacity(0.32), radius: 24, x: 0, y: 16)
-
-            Text("WM")
-                .font(.system(size: size * 0.32, weight: .black, design: .rounded))
-                .foregroundStyle(.white)
-                .tracking(1)
-
-            Image(systemName: "point.topleft.down.curvedto.point.bottomright.up")
-                .font(.system(size: size * 0.18, weight: .bold))
-                .foregroundStyle(.white.opacity(0.72))
-                .offset(y: size * 0.22)
-        }
-        .frame(width: size, height: size)
-        .accessibilityLabel("Waymint")
+        Image("WaymintLogo")
+            .resizable()
+            .scaledToFill()
+            .scaleEffect(1.08)
+            .frame(width: size, height: size)
+            .clipShape(RoundedRectangle(cornerRadius: size * 0.28, style: .continuous))
+            .shadow(color: WaymintTheme.primaryGreen.opacity(0.32), radius: 24, x: 0, y: 16)
+            .accessibilityLabel("Waymint")
     }
 }
 

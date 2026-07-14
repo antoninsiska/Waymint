@@ -355,7 +355,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = 79F66Q3U4L;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Waymint použije polohu jen pro upozornění na vstupenky poblíž místa.";
@@ -391,7 +391,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = 79F66Q3U4L;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Waymint použije polohu jen pro upozornění na vstupenky poblíž místa.";
@@ -426,7 +426,7 @@
 				APPLICATION_EXTENSION_API_ONLY = YES;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = 79F66Q3U4L;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = WaymintLiveActivityExtension/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.5;
@@ -454,7 +454,7 @@
 				APPLICATION_EXTENSION_API_ONLY = YES;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = 79F66Q3U4L;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = WaymintLiveActivityExtension/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.5;

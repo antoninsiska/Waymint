@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="Waymint/Assets.xcassets/AppIcon.appiconset/output5.png" alt="Waymint logo" width="160" height="160">
+  <img src="docs/waymint-logo.png" alt="Waymint logo" width="160" height="160">
 </p>
 
 <h1 align="center">Waymint</h1>
@@ -10,7 +10,7 @@
 
 Waymint is a local-first trip planner for iPhone and iPad. It keeps itineraries, stops, tickets, checklists, maps, and trip summaries together without requiring an account or a backend.
 
-The repository also contains a lightweight web companion in [`docs/`](docs/) that can be published with GitHub Pages and can exchange Waymint export files with the iOS app.
+The repository also contains a complete static web experience in [`docs/`](docs/): an animated product landing page and a browser-based trip planner. It can be published directly with GitHub Pages and can exchange Waymint export files with the iOS app.
 
 ## Highlights
 
@@ -20,7 +20,10 @@ The repository also contains a lightweight web companion in [`docs/`](docs/) tha
 - MapKit routes and maps
 - local notifications and Live Activities
 - import and export of `.way` and `.waymint` files
-- static web companion with browser-local storage
+- animated responsive landing page with a direct entry into the web planner
+- static web planner with browser-local storage and no account requirement
+- address search and automatic estimates for transfers between stops
+- shared `.way` and `.waymint` import/export formats across the native and web versions
 
 ## Requirements
 
@@ -38,17 +41,31 @@ The repository also contains a lightweight web companion in [`docs/`](docs/) tha
 
 The checked-in project intentionally does not contain a development-team identifier, provisioning profile, private signing certificate, or enabled iCloud container. Data remains local unless the user explicitly exports a file.
 
-## Run the web companion
+## Run the website
 
 ```sh
 python3 -m http.server 8080 -d docs
 ```
 
-Then open `http://localhost:8080`. See [`docs/README.md`](docs/README.md) for GitHub Pages setup and notes about the public geocoding and routing services used by the web version.
+Then open `http://localhost:8080`.
+
+The website opens on the Waymint landing page. Select **Vstup do aplikace** to enter the browser planner. From the planner, use the Waymint logo or **Úvodní stránka** in the sidebar to return to the landing page.
+
+See [`docs/README.md`](docs/README.md) for GitHub Pages setup, supported file formats, and notes about the public geocoding and routing services used by the web version.
+
+### Web features
+
+- responsive animated landing page
+- cities, trips, timed stops, notes, and checklists
+- address suggestions and map previews
+- estimated walking, cycling, public-transport, and driving transfers
+- local persistence in the current browser
+- import and export of individual trips, cities, or the complete library
+- light and dark planner themes
 
 ## Privacy
 
-The native app has no backend, analytics, advertising SDK, or account system. The web companion stores app data in the browser's `localStorage`; address suggestions and route calculations can send location queries to the third-party services described in [`docs/README.md`](docs/README.md).
+The native app has no backend, analytics, advertising SDK, or account system. The web planner stores app data in the browser's `localStorage`; clearing browser storage removes that local library unless it has first been exported. Address suggestions and route calculations can send location queries to the third-party services described in [`docs/README.md`](docs/README.md).
 
 ## Contributions
 

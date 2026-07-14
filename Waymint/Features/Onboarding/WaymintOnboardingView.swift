@@ -136,11 +136,13 @@ private struct OnboardingPageView: View {
 private struct OnboardingLogoMark: View {
     var body: some View {
         HStack(spacing: 10) {
-            Text("WM")
-                .font(.system(size: 14, weight: .black, design: .rounded))
-                .foregroundStyle(.white)
+            Image("WaymintLogo")
+                .resizable()
+                .scaledToFill()
+                .scaleEffect(1.18)
                 .frame(width: 42, height: 42)
-                .background(WaymintTheme.primaryGreen, in: RoundedRectangle(cornerRadius: 12))
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 1) {
                 Text("Waymint")
