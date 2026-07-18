@@ -4,6 +4,7 @@ enum WaymintModelContainer {
     static var schema: Schema {
         Schema([
             CityPlan.self,
+            PlaceBankItem.self,
             TripPlan.self,
             TripStop.self,
             StopChecklistItem.self,

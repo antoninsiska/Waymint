@@ -6,6 +6,7 @@ struct TimelineView: View {
     @Bindable var trip: TripPlan
 
     @State private var editingStop: TripStop?
+    private let scheduleCalculator = ScheduleCalculator()
 
     private var stops: [TripStop] {
         trip.sortedStops
@@ -89,12 +90,14 @@ struct TimelineView: View {
         for (index, stop) in reordered.enumerated() {
             stop.sortIndex = index
         }
+        scheduleCalculator.reconnectAndRecalculate(trip)
     }
 
     private func normalizeStopOrder() {
         for (index, stop) in stops.enumerated() {
             stop.sortIndex = index
         }
+        scheduleCalculator.reconnectAndRecalculate(trip)
     }
 }
 
@@ -204,20 +207,25 @@ private struct TimelineStopRow: View {
                         .foregroundStyle(WaymintTheme.secondaryText)
                 }
 
-                HStack(spacing: 12) {
+                HStack(spacing: 16) {
                     if isStart {
-                        Label("Začátek cesty", systemImage: "location.fill")
+                        Image(systemName: "location.fill")
+                            .accessibilityLabel("Začátek cesty")
                     } else {
-                        Label("Na místě \(stop.plannedVisitDurationMinutes.minutesLabel)", systemImage: "timer")
-                        Label("Dojezd \(inboundTravelMinutes.minutesLabel)", systemImage: "arrow.right")
+                        Label("\(stop.plannedVisitDurationMinutes)", systemImage: "timer")
+                            .accessibilityLabel("Na místě \(stop.plannedVisitDurationMinutes) minut")
+                        Label("\(inboundTravelMinutes)", systemImage: "arrow.right")
+                            .accessibilityLabel("Dojezd \(inboundTravelMinutes) minut")
                     }
-                    Label(stop.isRequired ? "Povinná" : "Volitelná", systemImage: stop.isRequired ? "exclamationmark.circle" : "circle")
+                    Image(systemName: stop.isRequired ? "exclamationmark.circle" : "circle")
+                        .accessibilityLabel(stop.isRequired ? "Povinná" : "Volitelná")
                     if stop.ticketCount > 0 {
                         Label("\(stop.ticketCount)", systemImage: "ticket")
                     }
                 }
                 .font(.caption)
                 .foregroundStyle(WaymintTheme.secondaryText)
+                .lineLimit(1)
             }
             .padding(12)
             .background(WaymintTheme.surface, in: RoundedRectangle(cornerRadius: WaymintTheme.cornerRadius))

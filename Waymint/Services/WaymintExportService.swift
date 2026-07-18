@@ -43,7 +43,7 @@ struct WaymintExportService {
 
     private func importLibrary(fromData data: Data, nextSortIndex: Int) throws -> [CityPlan] {
         let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
+        decoder.dateDecodingStrategy = .waymintISO8601
         let envelope = try decoder.decode(WaymintLibraryFileImport.self, from: data)
         guard envelope.format == "waymint.library" else {
             throw ImportError.unsupportedFormat
@@ -78,7 +78,7 @@ struct WaymintExportService {
 
         let data = try normalizedJSONData(from: url)
         let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
+        decoder.dateDecodingStrategy = .waymintISO8601
         let envelope = try decoder.decode(WaymintTripFileImport.self, from: data)
         guard envelope.format == "waymint.trip" else {
             throw ImportError.unsupportedFormat
@@ -118,7 +118,7 @@ private struct WaymintLibraryFileExport: Encodable {
 
     init(cities: [CityPlan]) {
         self.format = "waymint.library"
-        self.version = 1
+        self.version = 2
         self.exportedAt = .now
         self.brand = WaymintExportBrand()
         self.cities = cities
@@ -137,6 +137,7 @@ private struct WaymintExportCity: Encodable {
     let createdAt: Date
     let updatedAt: Date
     let trips: [WaymintExportTrip]
+    let places: [WaymintExportPlace]
 
     init(_ city: CityPlan) {
         self.id = city.id
@@ -148,6 +149,37 @@ private struct WaymintExportCity: Encodable {
         self.createdAt = city.createdAt
         self.updatedAt = city.updatedAt
         self.trips = city.sortedTripPlans.map(WaymintExportTrip.init)
+        self.places = city.sortedBankPlaces.map(WaymintExportPlace.init)
+    }
+}
+
+private struct WaymintExportPlace: Encodable {
+    let id: UUID
+    let title: String
+    let type: String
+    let highlights: String
+    let mainReason: String
+    let note: String
+    let recommendedVisitDurationMinutes: Int
+    let address: String
+    let latitude: Double?
+    let longitude: Double?
+    let createdAt: Date
+    let updatedAt: Date
+
+    init(_ place: PlaceBankItem) {
+        id = place.id
+        title = place.title
+        type = place.stopType.rawValue
+        highlights = place.highlights
+        mainReason = place.mainReason
+        note = place.note
+        recommendedVisitDurationMinutes = place.recommendedVisitDurationMinutes
+        address = place.address
+        latitude = place.latitude
+        longitude = place.longitude
+        createdAt = place.createdAt
+        updatedAt = place.updatedAt
     }
 }
 
@@ -194,6 +226,7 @@ private struct WaymintExportTrip: Encodable {
     let landingSubtitle: String
     let photoAlbumTitle: String?
     let note: String
+    let scheduleChangeHistoryText: String
     let stops: [WaymintExportStop]
     let travelSegments: [WaymintExportTravelSegment]
     let tickets: [WaymintExportTicket]
@@ -216,6 +249,7 @@ private struct WaymintExportTrip: Encodable {
         self.landingSubtitle = trip.landingSubtitle
         self.photoAlbumTitle = trip.photoAlbumTitle
         self.note = trip.note
+        self.scheduleChangeHistoryText = trip.scheduleChangeHistoryText
         self.stops = trip.sortedStops.map(WaymintExportStop.init)
         self.travelSegments = trip.sortedTravelSegments.map(WaymintExportTravelSegment.init)
         self.tickets = trip.sortedTickets.map(WaymintExportTicket.init)
@@ -342,6 +376,22 @@ private struct WaymintImportCity: Decodable {
     let createdAt: Date?
     let updatedAt: Date?
     let trips: [WaymintImportTrip]
+    let places: [WaymintImportPlace]?
+}
+
+private struct WaymintImportPlace: Decodable {
+    let id: UUID?
+    let title: String
+    let type: String?
+    let highlights: String?
+    let mainReason: String?
+    let note: String?
+    let recommendedVisitDurationMinutes: Int?
+    let address: String?
+    let latitude: Double?
+    let longitude: Double?
+    let createdAt: Date?
+    let updatedAt: Date?
 }
 
 private struct WaymintImportTrip: Decodable {
@@ -359,6 +409,7 @@ private struct WaymintImportTrip: Decodable {
     let landingSubtitle: String
     let photoAlbumTitle: String?
     let note: String
+    let scheduleChangeHistoryText: String?
     let stops: [WaymintImportStop]
     let travelSegments: [WaymintImportTravelSegment]
     let tickets: [WaymintImportTicket]
@@ -404,6 +455,30 @@ private struct WaymintImportTicket: Decodable {
     let externalURLString: String?
     let createdAt: Date
     let note: String
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case title
+        case type
+        case code
+        case localFilePath
+        case externalURLString
+        case createdAt
+        case note
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decodeIfPresent(UUID.self, forKey: .id)
+        title = try container.decode(String.self, forKey: .title)
+        type = try container.decodeIfPresent(String.self, forKey: .type)
+            ?? TicketType.textCode.rawValue
+        code = try container.decodeIfPresent(String.self, forKey: .code)
+        localFilePath = try container.decodeIfPresent(String.self, forKey: .localFilePath)
+        externalURLString = try container.decodeIfPresent(String.self, forKey: .externalURLString)
+        createdAt = try container.decodeIfPresent(Date.self, forKey: .createdAt) ?? .now
+        note = try container.decodeIfPresent(String.self, forKey: .note) ?? ""
+    }
 }
 
 private struct WaymintImportChecklistItem: Decodable {
@@ -419,7 +494,7 @@ private extension TripPlan {
             id: trip.id ?? UUID(),
             title: trip.title,
             date: trip.date,
-            startTime: trip.startTime,
+            startTime: trip.resolvedStartTime,
             hasFixedStartTime: trip.hasFixedStartTime ?? true,
             actualStartedAt: trip.actualStartedAt,
             actualEndedAt: trip.actualEndedAt,
@@ -429,7 +504,8 @@ private extension TripPlan {
             landingSubtitle: trip.landingSubtitle,
             photoAlbumLocalIdentifier: nil,
             photoAlbumTitle: trip.photoAlbumTitle,
-            note: trip.note
+            note: trip.note,
+            scheduleChangeHistoryText: trip.scheduleChangeHistoryText ?? ""
         )
 
         var stopIDMap: [UUID: UUID] = [:]
@@ -460,6 +536,26 @@ private extension TripPlan {
     }
 }
 
+private extension WaymintImportTrip {
+    var resolvedStartTime: Date {
+        let calendar = Calendar.current
+        guard calendar.component(.year, from: startTime) < 2002 else {
+            return startTime
+        }
+
+        let dateComponents = calendar.dateComponents([.year, .month, .day], from: date)
+        let timeComponents = calendar.dateComponents([.hour, .minute, .second], from: startTime)
+        var combined = DateComponents()
+        combined.year = dateComponents.year
+        combined.month = dateComponents.month
+        combined.day = dateComponents.day
+        combined.hour = timeComponents.hour
+        combined.minute = timeComponents.minute
+        combined.second = timeComponents.second
+        return calendar.date(from: combined) ?? date
+    }
+}
+
 private extension CityPlan {
     convenience init(imported city: WaymintImportCity, sortIndex: Int) {
         self.init(
@@ -475,6 +571,24 @@ private extension CityPlan {
 
         for (index, importedTrip) in city.trips.sorted(by: { $0.date < $1.date }).enumerated() {
             addTripPlan(TripPlan(imported: importedTrip, sortIndex: index))
+        }
+
+        for importedPlace in city.places ?? [] {
+            let place = PlaceBankItem(
+                title: importedPlace.title,
+                stopType: StopType(rawValue: importedPlace.type ?? "") ?? .custom,
+                highlights: importedPlace.highlights ?? "",
+                mainReason: importedPlace.mainReason ?? "",
+                note: importedPlace.note ?? "",
+                recommendedVisitDurationMinutes: importedPlace.recommendedVisitDurationMinutes ?? 45,
+                address: importedPlace.address ?? "",
+                latitude: importedPlace.latitude,
+                longitude: importedPlace.longitude
+            )
+            place.id = importedPlace.id ?? UUID()
+            place.createdAt = importedPlace.createdAt ?? .now
+            place.updatedAt = importedPlace.updatedAt ?? .now
+            addBankPlace(place)
         }
     }
 }
@@ -556,5 +670,48 @@ private extension Date {
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.dateFormat = "yyyy-MM-dd-HHmm"
         return formatter.string(from: self)
+    }
+}
+
+private extension JSONDecoder.DateDecodingStrategy {
+    static var waymintISO8601: JSONDecoder.DateDecodingStrategy {
+        .custom { decoder in
+            let container = try decoder.singleValueContainer()
+            let value = try container.decode(String.self)
+
+            let fractionalFormatter = ISO8601DateFormatter()
+            fractionalFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            if let date = fractionalFormatter.date(from: value) {
+                return date
+            }
+
+            let formatter = ISO8601DateFormatter()
+            formatter.formatOptions = [.withInternetDateTime]
+            if let date = formatter.date(from: value) {
+                return date
+            }
+
+            let dateOnlyFormatter = DateFormatter()
+            dateOnlyFormatter.locale = Locale(identifier: "en_US_POSIX")
+            dateOnlyFormatter.calendar = Calendar(identifier: .gregorian)
+            dateOnlyFormatter.dateFormat = "yyyy-MM-dd"
+            if let date = dateOnlyFormatter.date(from: value) {
+                return date
+            }
+
+            let timeOnlyFormatter = DateFormatter()
+            timeOnlyFormatter.locale = Locale(identifier: "en_US_POSIX")
+            timeOnlyFormatter.calendar = Calendar(identifier: .gregorian)
+            timeOnlyFormatter.defaultDate = Date(timeIntervalSinceReferenceDate: 0)
+            timeOnlyFormatter.dateFormat = "HH:mm"
+            if let date = timeOnlyFormatter.date(from: value) {
+                return date
+            }
+
+            throw DecodingError.dataCorruptedError(
+                in: container,
+                debugDescription: "Neplatne ISO 8601 datum: \(value)"
+            )
+        }
     }
 }

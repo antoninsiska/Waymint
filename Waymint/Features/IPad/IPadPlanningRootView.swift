@@ -10,7 +10,12 @@ struct IPadPlanningRootView: View {
     @State private var showingNewCity = false
     @State private var showingNewTrip = false
     @State private var showingSettings = false
+    @State private var editingCity: CityPlan?
     @State private var editingTrip: TripPlan?
+    @State private var cityPendingDeletion: CityPlan?
+    @State private var showingDeleteCityConfirmation = false
+    @State private var showingPlaceBank = false
+    @AppStorage("waymintPlaceBankEnabled") private var placeBankEnabled = false
     @State private var columnVisibility = NavigationSplitViewVisibility.all
 
     private var allTrips: [TripPlan] {
@@ -80,6 +85,24 @@ struct IPadPlanningRootView: View {
                                 Image(systemName: "plus")
                             }
                             .buttonStyle(.plain)
+
+                            Menu {
+                                Button {
+                                    editingCity = city
+                                } label: {
+                                    Label("Upravit město", systemImage: "pencil")
+                                }
+
+                                Button(role: .destructive) {
+                                    cityPendingDeletion = city
+                                    showingDeleteCityConfirmation = true
+                                } label: {
+                                    Label("Smazat město", systemImage: "trash")
+                                }
+                            } label: {
+                                Image(systemName: "ellipsis.circle")
+                            }
+                            .buttonStyle(.plain)
                         }
                         .textCase(nil)
                         .padding(.top, 8)
@@ -105,6 +128,11 @@ struct IPadPlanningRootView: View {
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     HStack {
+                        if placeBankEnabled {
+                            Button { showingPlaceBank = true } label: {
+                                Label("Banka míst", systemImage: "square.grid.2x2")
+                            }
+                        }
                         Button {
                             showingSettings = true
                         } label: {
@@ -121,7 +149,10 @@ struct IPadPlanningRootView: View {
             }
         } detail: {
             if let selectedTrip {
-                IPadTripPlannerView(trip: selectedTrip)
+                IPadTripPlannerView(
+                    trip: selectedTrip,
+                    columnVisibility: $columnVisibility
+                )
             } else if let selectedCity {
                 IPadEmptyPanel(
                     systemImage: "calendar.badge.plus",
@@ -155,6 +186,9 @@ struct IPadPlanningRootView: View {
                 TripPlanFormView(city: selectedCity, trip: nil, nextSortIndex: selectedCity.tripPlanCount)
             }
         }
+        .sheet(item: $editingCity) { city in
+            CityFormView(city: city, nextSortIndex: cities.count)
+        }
         .sheet(item: $editingTrip) { trip in
             if let city = trip.city {
                 TripPlanFormView(city: city, trip: trip, nextSortIndex: city.tripPlanCount)
@@ -162,6 +196,24 @@ struct IPadPlanningRootView: View {
         }
         .sheet(isPresented: $showingSettings) {
             AppSettingsView()
+        }
+        .sheet(isPresented: $showingPlaceBank) { PlaceBankView() }
+        .confirmationDialog(
+            "Smazat město \(cityPendingDeletion?.name ?? "")?",
+            isPresented: $showingDeleteCityConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Smazat město i všechny jeho cesty", role: .destructive) {
+                if let cityPendingDeletion {
+                    deleteCity(cityPendingDeletion)
+                }
+                cityPendingDeletion = nil
+            }
+            Button("Zrušit", role: .cancel) {
+                cityPendingDeletion = nil
+            }
+        } message: {
+            Text("Tuto akci nelze vrátit zpět.")
         }
         .navigationSplitViewStyle(.balanced)
     }
@@ -182,6 +234,22 @@ struct IPadPlanningRootView: View {
         for index in offsets {
             guard trips.indices.contains(index) else { continue }
             deleteTrip(trips[index])
+        }
+    }
+
+    private func deleteCity(_ city: CityPlan) {
+        let remainingCities = cities.filter { $0.id != city.id }
+        let remainingTrips = remainingCities.flatMap(\.sortedTripPlans)
+
+        if selectedCityID == city.id || selectedTrip?.city?.id == city.id {
+            selectedCityID = remainingCities.first?.id
+            selectedTripID = remainingTrips.first?.id
+        }
+
+        modelContext.delete(city)
+
+        for (index, remainingCity) in remainingCities.enumerated() {
+            remainingCity.sortIndex = index
         }
     }
 }

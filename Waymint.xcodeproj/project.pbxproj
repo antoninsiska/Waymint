@@ -13,6 +13,13 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
+		B1B2C3D4E5F6000000000011 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 9B5A7E0C3002ECA200CE12D6 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 9B5A7E133002ECA200CE12D6;
+			remoteInfo = Waymint;
+		};
 		A1B2C3D4E5F6000000000011 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 9B5A7E0C3002ECA200CE12D6 /* Project object */;
@@ -37,6 +44,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		B1B2C3D4E5F6000000000001 /* WaymintTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = WaymintTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		9B5A7E143002ECA200CE12D6 /* Waymint.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Waymint.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A1B2C3D4E5F6000000000004 /* WaymintLiveActivityExtension.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WaymintLiveActivityExtension.swift; sourceTree = "<group>"; };
 		A1B2C3D4E5F6000000000005 /* WaymintTripActivityAttributes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WaymintTripActivityAttributes.swift; sourceTree = "<group>"; };
@@ -45,6 +53,11 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
+		B1B2C3D4E5F6000000000002 /* WaymintTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = WaymintTests;
+			sourceTree = "<group>";
+		};
 		9B5A7E163002ECA200CE12D6 /* Waymint */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = Waymint;
@@ -53,6 +66,13 @@
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		B1B2C3D4E5F6000000000004 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		9B5A7E113002ECA200CE12D6 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -74,6 +94,7 @@
 			isa = PBXGroup;
 			children = (
 				9B5A7E163002ECA200CE12D6 /* Waymint */,
+				B1B2C3D4E5F6000000000002 /* WaymintTests */,
 				A1B2C3D4E5F6000000000007 /* WaymintLiveActivityExtension */,
 				9B5A7E153002ECA200CE12D6 /* Products */,
 			);
@@ -83,6 +104,7 @@
 			isa = PBXGroup;
 			children = (
 				9B5A7E143002ECA200CE12D6 /* Waymint.app */,
+				B1B2C3D4E5F6000000000001 /* WaymintTests.xctest */,
 				A1B2C3D4E5F6000000000006 /* WaymintLiveActivityExtension.appex */,
 			);
 			name = Products;
@@ -101,6 +123,27 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		B1B2C3D4E5F6000000000003 /* WaymintTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = B1B2C3D4E5F6000000000009 /* Build configuration list for PBXNativeTarget "WaymintTests" */;
+			buildPhases = (
+				B1B2C3D4E5F6000000000005 /* Sources */,
+				B1B2C3D4E5F6000000000004 /* Frameworks */,
+				B1B2C3D4E5F6000000000006 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				B1B2C3D4E5F6000000000010 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				B1B2C3D4E5F6000000000002 /* WaymintTests */,
+			);
+			name = WaymintTests;
+			productName = WaymintTests;
+			productReference = B1B2C3D4E5F6000000000001 /* WaymintTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 		9B5A7E133002ECA200CE12D6 /* Waymint */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 9B5A7E1F3002ECA300CE12D6 /* Build configuration list for PBXNativeTarget "Waymint" */;
@@ -154,6 +197,10 @@
 				LastSwiftUpdateCheck = 2660;
 				LastUpgradeCheck = 2660;
 				TargetAttributes = {
+					B1B2C3D4E5F6000000000003 = {
+						CreatedOnToolsVersion = 26.6;
+						TestTargetID = 9B5A7E133002ECA200CE12D6;
+					};
 					9B5A7E133002ECA200CE12D6 = {
 						CreatedOnToolsVersion = 26.6;
 					};
@@ -178,11 +225,19 @@
 			targets = (
 				9B5A7E133002ECA200CE12D6 /* Waymint */,
 				A1B2C3D4E5F6000000000008 /* WaymintLiveActivityExtension */,
+				B1B2C3D4E5F6000000000003 /* WaymintTests */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		B1B2C3D4E5F6000000000006 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		9B5A7E123002ECA200CE12D6 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -200,6 +255,13 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		B1B2C3D4E5F6000000000005 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		9B5A7E103002ECA200CE12D6 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -219,6 +281,11 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
+		B1B2C3D4E5F6000000000010 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 9B5A7E133002ECA200CE12D6 /* Waymint */;
+			targetProxy = B1B2C3D4E5F6000000000011 /* PBXContainerItemProxy */;
+		};
 		A1B2C3D4E5F6000000000010 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = A1B2C3D4E5F6000000000008 /* WaymintLiveActivityExtension */;
@@ -227,6 +294,40 @@
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
+		B1B2C3D4E5F6000000000007 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = 79F66Q3U4L;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.5;
+				PRODUCT_BUNDLE_IDENTIFIER = com.example.WaymintTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Waymint.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Waymint";
+			};
+			name = Debug;
+		};
+		B1B2C3D4E5F6000000000008 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = 79F66Q3U4L;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.5;
+				PRODUCT_BUNDLE_IDENTIFIER = com.example.WaymintTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Waymint.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Waymint";
+			};
+			name = Release;
+		};
 		9B5A7E1D3002ECA300CE12D6 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -358,12 +459,13 @@
 				DEVELOPMENT_TEAM = 79F66Q3U4L;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Waymint použije polohu jen pro upozornění na vstupenky poblíž místa.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Waymint používá polohu během aktivní cesty pro mapu, odhad příchodu, průběžnou opravu časů a upozornění poblíž zastávek.";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Waymint pouzije Photos jen pro pripojeni alba k ceste.";
 				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
 				INFOPLIST_KEY_NSSupportsLiveActivitiesFrequentUpdates = YES;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UIBackgroundModes = location;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
@@ -394,12 +496,13 @@
 				DEVELOPMENT_TEAM = 79F66Q3U4L;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Waymint použije polohu jen pro upozornění na vstupenky poblíž místa.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Waymint používá polohu během aktivní cesty pro mapu, odhad příchodu, průběžnou opravu časů a upozornění poblíž zastávek.";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Waymint pouzije Photos jen pro pripojeni alba k ceste.";
 				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
 				INFOPLIST_KEY_NSSupportsLiveActivitiesFrequentUpdates = YES;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UIBackgroundModes = location;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
@@ -479,6 +582,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		B1B2C3D4E5F6000000000009 /* Build configuration list for PBXNativeTarget "WaymintTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B1B2C3D4E5F6000000000007 /* Debug */,
+				B1B2C3D4E5F6000000000008 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		9B5A7E0F3002ECA200CE12D6 /* Build configuration list for PBXProject "Waymint" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (

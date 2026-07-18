@@ -129,6 +129,7 @@ final class LiveActivityService: ObservableObject {
             nextStopName: nextStop?.title,
             phaseTitle: isAtPlace ? "Na místě" : "Dojezd",
             remainingMinutes: max(0, Int(ceil(targetDate.timeIntervalSince(now) / 60))),
+            targetDate: targetDate,
             plannedDeparture: currentStop.plannedDeparture,
             delayMinutes: delayMinutes,
             showCurrentStop: showCurrentStop,

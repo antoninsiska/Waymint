@@ -11,6 +11,16 @@ struct TripMapView: View {
         trip.sortedStops.filter { $0.latitude != nil && $0.longitude != nil }
     }
 
+    private var routeSignature: String {
+        let stops = trip.sortedStops.map {
+            "\($0.id.uuidString):\($0.sortIndex):\($0.latitude ?? 0):\($0.longitude ?? 0)"
+        }
+        let segments = trip.sortedTravelSegments.map {
+            "\($0.fromStopID?.uuidString ?? "-"): \($0.toStopID?.uuidString ?? "-"): \($0.transportMode.rawValue)"
+        }
+        return (stops + segments).joined(separator: "|")
+    }
+
     private var mapRegion: MKCoordinateRegion {
         let coordinates = stopsWithCoordinates.compactMap { stop -> CLLocationCoordinate2D? in
             guard let latitude = stop.latitude, let longitude = stop.longitude else { return nil }
@@ -116,7 +126,7 @@ struct TripMapView: View {
                         StopDetailView(stop: stop)
                     }
                 }
-                .task(id: trip.updatedAt) {
+                .task(id: routeSignature) {
                     routeLines = await TripMapRouteBuilder.routeLines(for: trip)
                 }
             }

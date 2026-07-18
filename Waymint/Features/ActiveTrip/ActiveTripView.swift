@@ -1,4 +1,6 @@
 import Combine
+import CoreLocation
+import MapKit
 import SwiftData
 import SwiftUI
 
@@ -8,16 +10,32 @@ struct ActiveTripView: View {
 
     @State private var now = Date()
     @StateObject private var liveActivityService = LiveActivityService()
+    @StateObject private var locationService = ActiveTripLocationService()
     @State private var completedStopTitle: String?
     @State private var showingCompletionPulse = false
     @State private var showingLiveActivityOptions = false
+    @State private var showingStopDetails = false
     @AppStorage("activeTripShowCurrentStop") private var showCurrentStop = true
     @AppStorage("activeTripShowNextStop") private var showNextStop = true
     @AppStorage("activeTripShowDepartureTime") private var showDepartureTime = true
     @AppStorage("activeTripShowDelay") private var showDelay = true
     @AppStorage("waymintNotificationsEnabled") private var notificationsEnabled = true
+    @AppStorage("waymintActiveTripGPSCorrection") private var gpsCorrectionEnabled = true
+    @AppStorage("waymintGPSArrivalRadius") private var gpsArrivalRadius = 85
+    @AppStorage("waymintGPSDepartureRadius") private var gpsDepartureRadius = 140
+    @AppStorage("waymintGPSDepartureConfirmationSeconds") private var gpsDepartureConfirmationSeconds = 20
+    @State private var lastGPSCorrectionAt: Date?
+    @State private var lastCorrectedLocation: CLLocation?
+    @State private var gpsETA: Date?
+    @State private var gpsRoutePolyline: MKPolyline?
+    @State private var gpsCorrectionMessage: String?
+    @State private var confirmedInsideStopID: UUID?
+    @State private var departureCandidateAt: Date?
+    @State private var gpsRouteCalculationInProgress = false
+    @State private var lastGPSRouteAttemptAt: Date?
 
     private let delayCalculator = DelayCalculator()
+    private let scheduleCalculator = ScheduleCalculator()
     private let notificationScheduler = NotificationScheduler()
     private let timer = Timer.publish(every: 30, on: .main, in: .common).autoconnect()
 
@@ -53,104 +71,24 @@ struct ActiveTripView: View {
         return .travelingToPlace
     }
 
+
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
-                VStack(alignment: .leading, spacing: 10) {
-                    HStack {
-                        Text(phasePrimaryText)
-                            .font(.system(size: 52, weight: .bold, design: .rounded))
-                            .foregroundStyle(WaymintTheme.darkGreen)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.62)
-                        Spacer()
-                        StatusPill(phasePillText, systemImage: phasePillIcon)
-                    }
+        ZStack {
+            ActiveTripFullScreenMap(
+                currentStop: currentStop,
+                nextStop: nextStop,
+                userLocation: locationService.location,
+                routePolyline: gpsRoutePolyline
+            )
+            .ignoresSafeArea()
 
-                    if let currentStop {
-                        Text(currentStopTitle)
-                            .font(.title2.weight(.semibold))
-                        Text(phaseSubtitle(for: currentStop))
-                            .foregroundStyle(phaseSubtitleColor(for: currentStop))
-                    } else {
-                        Text("Plán nemá žádnou další zastávku.")
-                            .foregroundStyle(WaymintTheme.secondaryText)
-                    }
-                }
-                .padding(16)
-                .background(WaymintTheme.lightGreen.opacity(0.45), in: RoundedRectangle(cornerRadius: WaymintTheme.cornerRadius))
-
-                if let currentStop {
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("Aktuální zastávka")
-                            .font(.headline)
-                        ActiveStopSummary(stop: currentStop, showsClockTimes: trip.hasFixedStartTime)
-
-                        HStack(spacing: 8) {
-                            ActiveTripActionButton(startActionTitle(for: currentStop), systemImage: startActionIcon(for: currentStop), tint: WaymintTheme.primaryGreen) {
-                                start(currentStop)
-                            }
-
-                            ActiveTripActionButton("Hotovo", systemImage: "checkmark.circle.fill", tint: WaymintTheme.success) {
-                                complete(currentStop)
-                            }
-
-                            ActiveTripActionButton("Preskocit", systemImage: "forward.circle.fill", tint: WaymintTheme.warning) {
-                                skip(currentStop)
-                            }
-                        }
-                    }
-                    .padding(16)
-                    .background(WaymintTheme.surface, in: RoundedRectangle(cornerRadius: WaymintTheme.cornerRadius))
-                    .overlay {
-                        RoundedRectangle(cornerRadius: WaymintTheme.cornerRadius)
-                            .stroke(WaymintTheme.lightGreen, lineWidth: 1)
-                    }
-                }
-
-                if let currentStop {
-                    ActiveStopNotesChecklist(stop: currentStop)
-                }
-
-                DisclosureGroup(isExpanded: $showingLiveActivityOptions) {
-                    LiveActivityOptionsView(
-                        liveActivityService: liveActivityService,
-                        currentStopExists: currentStop != nil,
-                        showCurrentStop: $showCurrentStop,
-                        showNextStop: $showNextStop,
-                        showDepartureTime: $showDepartureTime,
-                        showDelay: $showDelay,
-                        restart: { startLiveActivity(forceRestart: true) }
-                    )
-                } label: {
-                    Label("Lock Screen a Dynamic Island", systemImage: liveActivityService.activityID == nil ? "lock" : "lock.fill")
-                        .font(.subheadline.weight(.semibold))
-                }
-                .padding(16)
-                .background(WaymintTheme.elevatedSurface, in: RoundedRectangle(cornerRadius: WaymintTheme.cornerRadius))
-
-                if let nextStop {
-                    Text("Následuje")
-                        .font(.headline)
-                    ActiveStopSummary(stop: nextStop, showsClockTimes: trip.hasFixedStartTime)
-                        .padding(16)
-                        .background(WaymintTheme.surface, in: RoundedRectangle(cornerRadius: WaymintTheme.cornerRadius))
-                }
-
-                if let currentStop {
-                    let summary = delayCalculator.delay(now: now, plannedTime: currentStop.plannedArrival)
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text("Návrhy při zpoždění")
-                            .font(.headline)
-                        ForEach(delayCalculator.suggestedActions(for: currentStop, delay: summary), id: \.self) { action in
-                            Label(action, systemImage: "lightbulb")
-                        }
-                    }
-                    .padding(16)
-                    .background(WaymintTheme.surface, in: RoundedRectangle(cornerRadius: WaymintTheme.cornerRadius))
-                }
+            VStack(spacing: 12) {
+                activeTripTopPanel
+                Spacer(minLength: 80)
+                activeTripBottomPanel
             }
-            .padding()
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
         }
         .overlay {
             if showingCompletionPulse, let completedStopTitle {
@@ -161,6 +99,7 @@ struct ActiveTripView: View {
         }
         .navigationTitle("Aktivní cesta")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbarBackground(.hidden, for: .navigationBar)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
@@ -171,9 +110,7 @@ struct ActiveTripView: View {
             }
         }
         .onAppear {
-            trip.status = .active
-            trip.actualStartedAt = trip.actualStartedAt ?? .now
-            trip.actualEndedAt = nil
+            prepareTripForStart()
             if stops.allSatisfy({ $0.status == .planned }), let first = stops.first {
                 first.status = .active
                 first.actualStart = first.actualStart ?? .now
@@ -181,32 +118,229 @@ struct ActiveTripView: View {
             liveActivityService.refreshStatus()
             startLiveActivity()
             scheduleNotifications()
+            if gpsCorrectionEnabled {
+                locationService.start()
+            }
+            consumePendingLiveActivityAction()
         }
         .onChange(of: showCurrentStop) { _, _ in updateLiveActivity() }
         .onChange(of: showNextStop) { _, _ in updateLiveActivity() }
         .onChange(of: showDepartureTime) { _, _ in updateLiveActivity() }
         .onChange(of: showDelay) { _, _ in updateLiveActivity() }
+        .onChange(of: gpsCorrectionEnabled) { _, enabled in
+            if enabled {
+                locationService.start()
+            } else {
+                locationService.stop()
+                gpsETA = nil
+                gpsRoutePolyline = nil
+                gpsCorrectionMessage = nil
+            }
+        }
+        .onReceive(locationService.$location.compactMap { $0 }) { location in
+            guard gpsCorrectionEnabled else { return }
+            Task { await correctSchedule(using: location) }
+        }
         .onReceive(timer) { date in
             now = date
             autoSwitchArrivedStop()
+            updateLiveActivity()
+        }
+        .onDisappear {
+            locationService.stop()
+        }
+    }
+
+    private var activeTripTopPanel: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(phasePrimaryText)
+                        .font(.system(size: 34, weight: .bold, design: .rounded))
+                        .foregroundStyle(WaymintTheme.darkGreen)
+                        .monospacedDigit()
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.72)
+                    if let currentStop {
+                        Text(phaseSubtitle(for: currentStop))
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(phaseSubtitleColor(for: currentStop))
+                            .lineLimit(2)
+                    }
+                }
+                Spacer()
+                VStack(alignment: .trailing, spacing: 6) {
+                    StatusPill(phasePillText, systemImage: phasePillIcon)
+                    if let location = locationService.location {
+                        Label("GPS ±\(Int(location.horizontalAccuracy)) m", systemImage: "location.fill")
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(WaymintTheme.primaryGreen)
+                    } else {
+                        Label("Čekám na GPS", systemImage: "location.slash")
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(WaymintTheme.secondaryText)
+                    }
+                }
+            }
+
+            VStack(alignment: .leading, spacing: 5) {
+                ProgressView(value: tripProgress)
+                    .tint(WaymintTheme.primaryGreen)
+                HStack {
+                    Text("Průběh cesty")
+                    Spacer()
+                    Text("\(finishedStopCount) z \(stops.count)")
+                }
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(WaymintTheme.secondaryText)
+            }
+        }
+        .padding(12)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 18))
+        .shadow(color: .black.opacity(0.12), radius: 12, y: 5)
+    }
+
+    @ViewBuilder
+    private var activeTripBottomPanel: some View {
+        if let currentStop {
+            VStack(alignment: .leading, spacing: 12) {
+                Button {
+                    withAnimation(.snappy) {
+                        showingStopDetails.toggle()
+                    }
+                } label: {
+                    HStack(spacing: 10) {
+                        Image(systemName: currentStop.stopType.systemImage)
+                            .font(.title2)
+                            .foregroundStyle(WaymintTheme.primaryGreen)
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(currentStopTitle)
+                                .font(.headline)
+                                .foregroundStyle(WaymintTheme.primaryText)
+                                .lineLimit(2)
+                            Text(currentPhase == .atPlace ? "Na místě do \(currentStop.plannedDeparture.waymintTime)" : "Příjezd \(currentStop.plannedArrival.waymintTime)")
+                                .font(.caption)
+                                .foregroundStyle(WaymintTheme.secondaryText)
+                        }
+                        Spacer()
+                        Image(systemName: showingStopDetails ? "chevron.down" : "chevron.up")
+                            .foregroundStyle(WaymintTheme.primaryGreen)
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+
+                HStack(spacing: 8) {
+                    ActiveTripActionButton(startActionTitle(for: currentStop), systemImage: startActionIcon(for: currentStop), tint: WaymintTheme.primaryGreen) {
+                        start(currentStop)
+                    }
+                    ActiveTripActionButton("Hotovo", systemImage: "checkmark.circle.fill", tint: WaymintTheme.success) {
+                        complete(currentStop)
+                    }
+                    ActiveTripActionButton("Přeskočit", systemImage: "forward.circle.fill", tint: WaymintTheme.warning) {
+                        skip(currentStop)
+                    }
+                }
+
+                if showingStopDetails {
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 12) {
+                            if let message = gpsCorrectionMessage ?? locationService.errorMessage {
+                                Label(message, systemImage: "location.circle")
+                                    .font(.caption)
+                                    .foregroundStyle(WaymintTheme.secondaryText)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                            }
+
+                            Toggle("Průběžná GPS korekce", isOn: $gpsCorrectionEnabled)
+
+                            if !scheduleHistory.isEmpty {
+                                DisclosureGroup("Historie přepočtů") {
+                                    ForEach(Array(scheduleHistory.suffix(8).reversed()), id: \.self) { entry in
+                                        Text(entry)
+                                            .font(.caption)
+                                            .foregroundStyle(WaymintTheme.secondaryText)
+                                            .frame(maxWidth: .infinity, alignment: .leading)
+                                    }
+                                }
+                            }
+
+                            Button {
+                                guard let index = currentStopIndex else { return }
+                                recalculateFromArrival(.now, at: index)
+                                refreshAfterScheduleChange()
+                            } label: {
+                                Label("Přepočítat zbývající plán od teď", systemImage: "clock.arrow.circlepath")
+                            }
+                            .buttonStyle(.bordered)
+
+                            ActiveStopNotesChecklist(stop: currentStop)
+
+                            if let nextStop {
+                                VStack(alignment: .leading, spacing: 6) {
+                                    Text("Následuje")
+                                        .font(.caption.weight(.bold))
+                                        .foregroundStyle(WaymintTheme.secondaryText)
+                                    ActiveStopSummary(stop: nextStop, showsClockTimes: trip.hasFixedStartTime)
+                                }
+                            }
+
+                            DisclosureGroup(isExpanded: $showingLiveActivityOptions) {
+                                LiveActivityOptionsView(
+                                    liveActivityService: liveActivityService,
+                                    currentStopExists: true,
+                                    showCurrentStop: $showCurrentStop,
+                                    showNextStop: $showNextStop,
+                                    showDepartureTime: $showDepartureTime,
+                                    showDelay: $showDelay,
+                                    restart: { startLiveActivity(forceRestart: true) }
+                                )
+                            } label: {
+                                Label("Lock Screen a Dynamic Island", systemImage: liveActivityService.activityID == nil ? "lock" : "lock.fill")
+                                    .font(.subheadline.weight(.semibold))
+                            }
+                        }
+                    }
+                    .frame(maxHeight: 310)
+                }
+            }
+            .padding(14)
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 22))
+            .shadow(color: .black.opacity(0.18), radius: 18, y: 8)
         }
     }
 
     private func start(_ stop: TripStop) {
+        gpsRoutePolyline = nil
         stop.status = .active
-        stop.actualStart = stop.actualStart ?? .now
+        let arrival = Date()
+        stop.actualStart = stop.actualStart ?? arrival
+        if let index = stops.firstIndex(where: { $0.id == stop.id }) {
+            recalculateFromArrival(arrival, at: index)
+        }
+        refreshAfterScheduleChange()
         updateLiveActivity()
     }
 
     private func complete(_ stop: TripStop) {
+        gpsRoutePolyline = nil
         completedStopTitle = stop.title
         withAnimation(.spring(response: 0.35, dampingFraction: 0.62)) {
             showingCompletionPulse = true
         }
         stop.status = .completed
-        stop.actualEnd = .now
+        let departure = Date()
+        stop.actualEnd = departure
+        if let index = stops.firstIndex(where: { $0.id == stop.id }) {
+            scheduleCalculator.recalculateAfterDeparture(
+                departure,
+                from: index,
+                stops: stops,
+                segments: trip.sortedTravelSegments
+            )
+        }
         markNext(after: stop)
-        updateLiveActivity()
+        refreshAfterScheduleChange()
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
             withAnimation(.easeOut(duration: 0.25)) {
                 showingCompletionPulse = false
@@ -215,10 +349,20 @@ struct ActiveTripView: View {
     }
 
     private func skip(_ stop: TripStop) {
+        gpsRoutePolyline = nil
         stop.status = .skipped
-        stop.actualEnd = .now
+        let departure = Date()
+        stop.actualEnd = departure
+        if let index = stops.firstIndex(where: { $0.id == stop.id }) {
+            scheduleCalculator.recalculateAfterDeparture(
+                departure,
+                from: index,
+                stops: stops,
+                segments: trip.sortedTravelSegments
+            )
+        }
         markNext(after: stop)
-        updateLiveActivity()
+        refreshAfterScheduleChange()
     }
 
     private func markNext(after stop: TripStop) {
@@ -226,6 +370,7 @@ struct ActiveTripView: View {
               stops.indices.contains(index + 1) else {
             trip.status = .completed
             trip.actualEndedAt = .now
+            restoreFlexibleStartIfNeeded()
             return
         }
         stops[index + 1].status = .next
@@ -234,21 +379,48 @@ struct ActiveTripView: View {
     private func autoSwitchArrivedStop() {
         guard trip.hasFixedStartTime else { return }
         guard let currentStop,
-              currentStop.status == .next || currentStop.status == .planned,
+              (currentStop.status == .next || currentStop.status == .planned),
               now >= currentStop.plannedArrival else {
             return
         }
         currentStop.status = .active
         currentStop.actualStart = currentStop.actualStart ?? now
-        updateLiveActivity()
+        if let index = stops.firstIndex(where: { $0.id == currentStop.id }) {
+            recalculateFromArrival(now, at: index)
+        }
+        refreshAfterScheduleChange()
     }
 
     private func endTrip() {
         trip.status = .completed
         trip.actualEndedAt = .now
+        restoreFlexibleStartIfNeeded()
         Task {
             await liveActivityService.end()
             dismiss()
+        }
+    }
+
+    private func consumePendingLiveActivityAction() {
+        let defaults = UserDefaults.standard
+        guard defaults.string(forKey: "waymintPendingLiveActivityTripID") == trip.id.uuidString,
+              let action = defaults.string(forKey: "waymintPendingLiveActivityAction"),
+              let currentStop else {
+            return
+        }
+
+        defaults.removeObject(forKey: "waymintPendingLiveActivityAction")
+        defaults.removeObject(forKey: "waymintPendingLiveActivityTripID")
+
+        switch action {
+        case "start":
+            start(currentStop)
+        case "complete":
+            complete(currentStop)
+        case "skip":
+            skip(currentStop)
+        default:
+            break
         }
     }
 
@@ -287,6 +459,165 @@ struct ActiveTripView: View {
         Task {
             _ = try? await notificationScheduler.requestPermissionIfNeeded()
             notificationScheduler.scheduleTripNotifications(for: trip)
+        }
+    }
+
+    private func recalculateFromArrival(_ arrival: Date, at index: Int) {
+        scheduleCalculator.recalculateFromArrival(
+            arrival,
+            at: index,
+            stops: stops,
+            segments: trip.sortedTravelSegments
+        )
+    }
+
+    private func prepareTripForStart() {
+        let startedAt = trip.actualStartedAt ?? Date()
+        trip.status = .active
+        trip.actualStartedAt = startedAt
+        trip.actualEndedAt = nil
+
+        guard !trip.hasFixedStartTime else { return }
+        trip.hasTemporaryActiveStartTime = true
+        trip.hasFixedStartTime = true
+        trip.startTime = startedAt
+        trip.date = startedAt
+        scheduleCalculator.recalculateTrip(trip, anchor: startedAt)
+    }
+
+    private func restoreFlexibleStartIfNeeded() {
+        guard trip.hasTemporaryActiveStartTime else { return }
+        trip.hasTemporaryActiveStartTime = false
+        trip.hasFixedStartTime = false
+        trip.updatedAt = .now
+    }
+
+    private var finishedStopCount: Int {
+        stops.filter { $0.status == .completed || $0.status == .skipped }.count
+    }
+
+    private var tripProgress: Double {
+        guard !stops.isEmpty else { return 0 }
+        return Double(finishedStopCount) / Double(stops.count)
+    }
+
+    private func refreshAfterScheduleChange() {
+        trip.updatedAt = .now
+        scheduleNotifications()
+        updateLiveActivity()
+    }
+
+    private func correctSchedule(using location: CLLocation) async {
+        guard let currentStop else { return }
+        guard location.horizontalAccuracy >= 0 else { return }
+        guard location.horizontalAccuracy <= 120 else {
+            gpsCorrectionMessage = "GPS signál je zatím příliš nepřesný (±\(Int(location.horizontalAccuracy)) m). Čekám na přesnější polohu."
+            departureCandidateAt = nil
+            return
+        }
+
+        if currentStop.status == .active {
+            if let latitude = currentStop.latitude,
+               let longitude = currentStop.longitude {
+                let distance = Int(location.distance(from: CLLocation(latitude: latitude, longitude: longitude)))
+                if distance <= gpsArrivalRadius {
+                    confirmedInsideStopID = currentStop.id
+                    departureCandidateAt = nil
+                    gpsCorrectionMessage = "Na místě · \(distance) m od \(currentStop.title). Čas návštěvy běží."
+                } else if confirmedInsideStopID == currentStop.id, distance >= gpsDepartureRadius {
+                    if let departureCandidateAt,
+                       Date().timeIntervalSince(departureCandidateAt) >= Double(gpsDepartureConfirmationSeconds) {
+                        gpsCorrectionMessage = "Waymint rozpoznal odchod z \(currentStop.title)."
+                        recordScheduleChange("GPS: odchod z \(currentStop.title)")
+                        confirmedInsideStopID = nil
+                        self.departureCandidateAt = nil
+                        complete(currentStop)
+                    } else if departureCandidateAt == nil {
+                        self.departureCandidateAt = .now
+                        gpsCorrectionMessage = "Ověřuji odchod z \(currentStop.title)…"
+                    }
+                } else {
+                    departureCandidateAt = nil
+                    gpsCorrectionMessage = "GPS je aktivní · \(distance) m od \(currentStop.title)."
+                }
+            } else {
+                gpsCorrectionMessage = "GPS je aktivní. Aktuální zastávka nemá uložené souřadnice."
+            }
+            return
+        }
+
+        guard currentStop.status == .next || currentStop.status == .planned,
+              let latitude = currentStop.latitude,
+              let longitude = currentStop.longitude,
+              let index = stops.firstIndex(where: { $0.id == currentStop.id }) else {
+            return
+        }
+
+        if let lastGPSCorrectionAt,
+           Date().timeIntervalSince(lastGPSCorrectionAt) < 35,
+           let lastCorrectedLocation,
+           location.distance(from: lastCorrectedLocation) < 40 {
+            return
+        }
+
+        let destination = CLLocation(latitude: latitude, longitude: longitude)
+        let distance = location.distance(from: destination)
+        if distance <= Double(gpsArrivalRadius) {
+            currentStop.status = .active
+            currentStop.actualStart = currentStop.actualStart ?? .now
+            confirmedInsideStopID = currentStop.id
+            departureCandidateAt = nil
+            recalculateFromArrival(.now, at: index)
+            gpsETA = .now
+            gpsRoutePolyline = nil
+            gpsCorrectionMessage = "Waymint rozpoznal příchod na \(currentStop.title)."
+            recordScheduleChange("GPS: příchod na \(currentStop.title), plán přepočítán")
+            lastGPSCorrectionAt = .now
+            lastCorrectedLocation = location
+            refreshAfterScheduleChange()
+            return
+        }
+
+        guard !gpsRouteCalculationInProgress else { return }
+        if let lastGPSRouteAttemptAt,
+           Date().timeIntervalSince(lastGPSRouteAttemptAt) < 45 {
+            return
+        }
+        lastGPSRouteAttemptAt = .now
+        gpsRouteCalculationInProgress = true
+        defer { gpsRouteCalculationInProgress = false }
+
+        let request = MKDirections.Request()
+        request.source = MKMapItem(location: location, address: nil)
+        request.destination = MKMapItem(location: destination, address: nil)
+        let inboundSegment = trip.sortedTravelSegments.first { $0.toStopID == currentStop.id }
+        request.transportType = (inboundSegment?.transportMode ?? .walking).mapKitTransportType
+
+        do {
+            let response = try await MKDirections(request: request).calculate()
+            guard let route = response.routes.first else { return }
+            gpsRoutePolyline = route.polyline
+            let arrival = Date().addingTimeInterval(route.expectedTravelTime)
+            if let inboundSegment,
+               index > 0 {
+                let elapsedAndRemainingMinutes = max(
+                    0,
+                    Int(ceil(arrival.timeIntervalSince(stops[index - 1].plannedDeparture) / 60))
+                )
+                inboundSegment.plannedDurationMinutes = max(
+                    0,
+                    elapsedAndRemainingMinutes - inboundSegment.bufferMinutes
+                )
+            }
+            recalculateFromArrival(arrival, at: index)
+            gpsETA = arrival
+            gpsCorrectionMessage = "GPS odhad: \(Int(route.distance)) m, příjezd v \(arrival.waymintTime)."
+            recordScheduleChange("GPS: nový odhad příjezdu na \(currentStop.title) v \(arrival.waymintTime)")
+            lastGPSCorrectionAt = .now
+            lastCorrectedLocation = location
+            refreshAfterScheduleChange()
+        } catch {
+            gpsCorrectionMessage = "GPS funguje, ale Apple Mapy teď nedokázaly spočítat trasu."
         }
     }
 
@@ -399,11 +730,164 @@ struct ActiveTripView: View {
     private func elapsedMinutes(since date: Date) -> Int {
         max(0, Int(now.timeIntervalSince(date) / 60))
     }
+
+    private var scheduleHistory: [String] {
+        trip.scheduleChangeHistoryText.components(separatedBy: .newlines).filter { !$0.isEmpty }
+    }
+
+    private func recordScheduleChange(_ message: String) {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "HH:mm"
+        var entries = scheduleHistory
+        entries.append("\(formatter.string(from: .now)) · \(message)")
+        trip.scheduleChangeHistoryText = entries.suffix(40).joined(separator: "\n")
+        trip.updatedAt = .now
+    }
 }
 
-private enum ActiveTripPhase {
+private enum ActiveTripPhase: Equatable {
     case travelingToPlace
     case atPlace
+}
+
+private struct ActiveTripFullScreenMap: View {
+    let currentStop: TripStop?
+    let nextStop: TripStop?
+    let userLocation: CLLocation?
+    let routePolyline: MKPolyline?
+    @State private var position: MapCameraPosition = .automatic
+
+    var body: some View {
+        Map(position: $position) {
+            if let routePolyline {
+                MapPolyline(routePolyline)
+                    .stroke(
+                        WaymintTheme.darkGreen,
+                        style: StrokeStyle(lineWidth: 6, lineCap: .round, lineJoin: .round)
+                    )
+            }
+            UserAnnotation()
+            if let currentStop,
+               let coordinate = coordinate(for: currentStop) {
+                Marker(currentStop.title, systemImage: "mappin.circle.fill", coordinate: coordinate)
+                    .tint(WaymintTheme.primaryGreen)
+            }
+            if let nextStop,
+               nextStop.id != currentStop?.id,
+               let coordinate = coordinate(for: nextStop) {
+                Marker(nextStop.title, systemImage: "flag.fill", coordinate: coordinate)
+                    .tint(WaymintTheme.darkGreen)
+            }
+        }
+        .mapStyle(.standard)
+        .mapControls {
+            MapCompass()
+            MapScaleView()
+        }
+        .onChange(of: userLocation) { _, location in
+            guard let location else { return }
+            position = .region(region(centeredOn: location.coordinate))
+        }
+    }
+
+    private func region(centeredOn userCoordinate: CLLocationCoordinate2D) -> MKCoordinateRegion {
+        guard let currentStop,
+              let destination = coordinate(for: currentStop) else {
+            return MKCoordinateRegion(
+                center: userCoordinate,
+                span: MKCoordinateSpan(latitudeDelta: 0.015, longitudeDelta: 0.015)
+            )
+        }
+
+        let center = CLLocationCoordinate2D(
+            latitude: (userCoordinate.latitude + destination.latitude) / 2,
+            longitude: (userCoordinate.longitude + destination.longitude) / 2
+        )
+        return MKCoordinateRegion(
+            center: center,
+            span: MKCoordinateSpan(
+                latitudeDelta: max(0.008, abs(userCoordinate.latitude - destination.latitude) * 1.8),
+                longitudeDelta: max(0.008, abs(userCoordinate.longitude - destination.longitude) * 1.8)
+            )
+        )
+    }
+
+    private func coordinate(for stop: TripStop) -> CLLocationCoordinate2D? {
+        guard let latitude = stop.latitude, let longitude = stop.longitude else { return nil }
+        return CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
+    }
+}
+
+private struct ActiveTripMapCard: View {
+    let currentStop: TripStop
+    let nextStop: TripStop?
+    let userLocation: CLLocation?
+    let gpsETA: Date?
+    @Binding var correctionEnabled: Bool
+    let correctionMessage: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Label("GPS korekce a mapa", systemImage: "location.fill")
+                    .font(.headline)
+                Spacer()
+                Toggle("GPS korekce", isOn: $correctionEnabled)
+                    .labelsHidden()
+            }
+
+            Map {
+                UserAnnotation()
+                if let coordinate = coordinate(for: currentStop) {
+                    Marker(currentStop.title, systemImage: "mappin.circle.fill", coordinate: coordinate)
+                        .tint(WaymintTheme.primaryGreen)
+                }
+                if let nextStop,
+                   nextStop.id != currentStop.id,
+                   let coordinate = coordinate(for: nextStop) {
+                    Marker(nextStop.title, systemImage: "flag.fill", coordinate: coordinate)
+                        .tint(WaymintTheme.darkGreen)
+                }
+            }
+            .mapStyle(.standard(pointsOfInterest: .excludingAll))
+            .mapControls {
+                MapUserLocationButton()
+                MapCompass()
+            }
+            .frame(height: 230)
+            .clipShape(RoundedRectangle(cornerRadius: WaymintTheme.cornerRadius))
+
+            HStack(spacing: 12) {
+                if let userLocation {
+                    Label("±\(Int(userLocation.horizontalAccuracy)) m", systemImage: "scope")
+                } else {
+                    Label("Čekám na polohu", systemImage: "location.slash")
+                }
+                if let gpsETA {
+                    Label("Příjezd \(gpsETA.waymintTime)", systemImage: "clock")
+                }
+            }
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(WaymintTheme.secondaryText)
+
+            if let correctionMessage {
+                Text(correctionMessage)
+                    .font(.caption)
+                    .foregroundStyle(WaymintTheme.secondaryText)
+            }
+        }
+        .padding(16)
+        .background(WaymintTheme.surface, in: RoundedRectangle(cornerRadius: WaymintTheme.cornerRadius))
+        .overlay {
+            RoundedRectangle(cornerRadius: WaymintTheme.cornerRadius)
+                .stroke(WaymintTheme.lightGreen, lineWidth: 1)
+        }
+    }
+
+    private func coordinate(for stop: TripStop) -> CLLocationCoordinate2D? {
+        guard let latitude = stop.latitude, let longitude = stop.longitude else { return nil }
+        return CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
+    }
 }
 
 private struct CompletionPulseView: View {
@@ -615,7 +1099,6 @@ private struct ActiveTripActionButton: View {
         .accessibilityLabel(title)
     }
 }
-
 #Preview {
     NavigationStack {
         ActiveTripView(trip: TripPlan(title: "Centrum"))

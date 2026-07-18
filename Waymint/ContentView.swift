@@ -3,8 +3,10 @@ import SwiftUI
 import UIKit
 
 struct ContentView: View {
+    @Query private var trips: [TripPlan]
     @AppStorage("waymintHasSeenOnboarding") private var hasSeenOnboarding = false
     @State private var showsStarter = true
+    @State private var deepLinkedActiveTrip: TripPlan?
 
     var body: some View {
         ZStack {
@@ -39,6 +41,29 @@ struct ContentView: View {
                 hasSeenOnboarding = true
             }
         }
+        .fullScreenCover(item: $deepLinkedActiveTrip) { trip in
+            NavigationStack {
+                ActiveTripView(trip: trip)
+            }
+        }
+        .onOpenURL(perform: handleDeepLink)
+    }
+
+    private func handleDeepLink(_ url: URL) {
+        guard url.scheme == "waymint",
+              url.host == "active-trip",
+              let idText = url.pathComponents.dropFirst().first,
+              let tripID = UUID(uuidString: idText),
+              let trip = trips.first(where: { $0.id == tripID }) else {
+            return
+        }
+
+        if let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+           let action = components.queryItems?.first(where: { $0.name == "action" })?.value {
+            UserDefaults.standard.set(action, forKey: "waymintPendingLiveActivityAction")
+            UserDefaults.standard.set(tripID.uuidString, forKey: "waymintPendingLiveActivityTripID")
+        }
+        deepLinkedActiveTrip = trip
     }
 }
 

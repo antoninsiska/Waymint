@@ -8,6 +8,7 @@ final class TripPlan {
     var date: Date = Date()
     var startTime: Date = Date()
     var hasFixedStartTime: Bool = true
+    var hasTemporaryActiveStartTime: Bool = false
     var actualStartedAt: Date?
     var actualEndedAt: Date?
     var statusRawValue: String = TripPlanStatus.draft.rawValue
@@ -17,6 +18,7 @@ final class TripPlan {
     var photoAlbumLocalIdentifier: String?
     var photoAlbumTitle: String?
     var note: String = ""
+    var scheduleChangeHistoryText: String = ""
     var createdAt: Date = Date()
     var updatedAt: Date = Date()
 
@@ -37,6 +39,7 @@ final class TripPlan {
         date: Date = .now,
         startTime: Date = .now,
         hasFixedStartTime: Bool = true,
+        hasTemporaryActiveStartTime: Bool = false,
         actualStartedAt: Date? = nil,
         actualEndedAt: Date? = nil,
         status: TripPlanStatus = .draft,
@@ -46,6 +49,7 @@ final class TripPlan {
         photoAlbumLocalIdentifier: String? = nil,
         photoAlbumTitle: String? = nil,
         note: String = "",
+        scheduleChangeHistoryText: String = "",
         createdAt: Date = .now,
         updatedAt: Date = .now,
         stops: [TripStop] = [],
@@ -57,6 +61,7 @@ final class TripPlan {
         self.date = date
         self.startTime = startTime
         self.hasFixedStartTime = hasFixedStartTime
+        self.hasTemporaryActiveStartTime = hasTemporaryActiveStartTime
         self.actualStartedAt = actualStartedAt
         self.actualEndedAt = actualEndedAt
         self.statusRawValue = status.rawValue
@@ -66,6 +71,7 @@ final class TripPlan {
         self.photoAlbumLocalIdentifier = photoAlbumLocalIdentifier
         self.photoAlbumTitle = photoAlbumTitle
         self.note = note
+        self.scheduleChangeHistoryText = scheduleChangeHistoryText
         self.createdAt = createdAt
         self.updatedAt = updatedAt
         self.stops = stops

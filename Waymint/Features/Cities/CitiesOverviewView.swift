@@ -9,6 +9,8 @@ struct CitiesOverviewView: View {
     @State private var showingNewCity = false
     @State private var showingSettings = false
     @State private var editingCity: CityPlan?
+    @State private var showingPlaceBank = false
+    @AppStorage("waymintPlaceBankEnabled") private var placeBankEnabled = false
 
     private var filteredCities: [CityPlan] {
         guard !searchText.isEmpty else { return cities }
@@ -72,6 +74,11 @@ struct CitiesOverviewView: View {
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     HStack {
+                        if placeBankEnabled {
+                            Button { showingPlaceBank = true } label: {
+                                Label("Banka míst", systemImage: "square.grid.2x2")
+                            }
+                        }
                         Button {
                             showingSettings = true
                         } label: {
@@ -95,6 +102,7 @@ struct CitiesOverviewView: View {
             .sheet(isPresented: $showingSettings) {
                 AppSettingsView()
             }
+            .sheet(isPresented: $showingPlaceBank) { PlaceBankView() }
         }
     }
 

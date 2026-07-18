@@ -14,6 +14,10 @@ struct AppSettingsView: View {
     @AppStorage("activeTripShowNextStop") private var showNextStop = false
     @AppStorage("activeTripShowDepartureTime") private var showDepartureTime = true
     @AppStorage("activeTripShowDelay") private var showDelay = true
+    @AppStorage("waymintPlaceBankEnabled") private var placeBankEnabled = false
+    @AppStorage("waymintGPSArrivalRadius") private var gpsArrivalRadius = 85
+    @AppStorage("waymintGPSDepartureRadius") private var gpsDepartureRadius = 140
+    @AppStorage("waymintGPSDepartureConfirmationSeconds") private var gpsDepartureConfirmationSeconds = 20
     @Environment(\.dismiss) private var dismiss
     @State private var showingICloudConsent = false
     @State private var exportedLibraryFile: ExportedWayFile?
@@ -27,6 +31,13 @@ struct AppSettingsView: View {
     var body: some View {
         NavigationStack {
             Form {
+                Section("Režimy aplikace") {
+                    Toggle("Banka míst", isOn: $placeBankEnabled)
+                    Text("Přidá katalog míst rozdělený podle měst. Při tvorbě zastávky pak můžeš převzít uložené údaje a řešit hlavně přesun.")
+                        .font(.caption)
+                        .foregroundStyle(WaymintTheme.secondaryText)
+                }
+
                 Section("Ruční synchronizace") {
                     Button {
                         exportLibrary()
@@ -69,6 +80,15 @@ struct AppSettingsView: View {
                 Section("Upozornění") {
                     Toggle("Upozornit na odchod a příjezd", isOn: $notificationsEnabled)
                     Text("Waymint může připomenout čas odchodu, správný čas u místa a vstupenky poblíž zastávky.")
+                        .font(.caption)
+                        .foregroundStyle(WaymintTheme.secondaryText)
+                }
+
+                Section("GPS automatika") {
+                    Stepper("Příchod do \(gpsArrivalRadius) m", value: $gpsArrivalRadius, in: 30...150, step: 5)
+                    Stepper("Odchod od \(gpsDepartureRadius) m", value: $gpsDepartureRadius, in: 80...300, step: 10)
+                    Stepper("Potvrdit odchod po \(gpsDepartureConfirmationSeconds) s", value: $gpsDepartureConfirmationSeconds, in: 10...60, step: 5)
+                    Text("Větší rozdíl mezi příchodem a odchodem omezuje falešné přepnutí při nepřesné GPS.")
                         .font(.caption)
                         .foregroundStyle(WaymintTheme.secondaryText)
                 }

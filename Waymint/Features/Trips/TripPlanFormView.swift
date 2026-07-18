@@ -20,6 +20,7 @@ struct TripPlanFormView: View {
     @State private var photoAlbumTitle: String?
     @State private var showingAlbumPicker = false
     @State private var note = ""
+    private let scheduleCalculator = ScheduleCalculator()
 
     var body: some View {
         NavigationStack {
@@ -116,12 +117,13 @@ struct TripPlanFormView: View {
 
     private func save() {
         let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalizedStartTime = Self.combinedDate(date: date, time: startTime)
 
         if let trip {
             shiftTimelineIfNeeded(for: trip)
             trip.title = trimmedTitle
             trip.date = date
-            trip.startTime = startTime
+            trip.startTime = normalizedStartTime
             trip.hasFixedStartTime = hasFixedStartTime
             trip.status = status
             trip.landingTitle = landingTitle.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -134,7 +136,7 @@ struct TripPlanFormView: View {
             let newTrip = TripPlan(
                 title: trimmedTitle,
                 date: date,
-                startTime: startTime,
+                startTime: normalizedStartTime,
                 hasFixedStartTime: hasFixedStartTime,
                 status: status,
                 sortIndex: nextSortIndex,
@@ -159,20 +161,8 @@ struct TripPlanFormView: View {
             oldAnchor = trip.sortedStops.first?.plannedArrival ?? Self.combinedDate(date: trip.date, time: trip.startTime)
         }
         let newAnchor = Self.combinedDate(date: date, time: startTime)
-        let delta = newAnchor.timeIntervalSince(oldAnchor)
-        guard abs(delta) >= 60 else { return }
-
-        for stop in trip.stops ?? [] {
-            stop.plannedArrival = stop.plannedArrival.addingTimeInterval(delta)
-            stop.plannedDeparture = stop.plannedDeparture.addingTimeInterval(delta)
-            stop.updatedAt = .now
-        }
-
-        for segment in trip.travelSegments ?? [] {
-            if let plannedDeparture = segment.plannedDeparture {
-                segment.plannedDeparture = plannedDeparture.addingTimeInterval(delta)
-            }
-        }
+        guard abs(newAnchor.timeIntervalSince(oldAnchor)) >= 60 else { return }
+        scheduleCalculator.recalculateTrip(trip, anchor: newAnchor)
     }
 
     private static func combinedDate(date: Date, time: Date) -> Date {

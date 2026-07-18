@@ -43,6 +43,8 @@ struct StatusPill: View {
         Label {
             Text(text)
                 .font(.caption.weight(.semibold))
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
         } icon: {
             if let systemImage {
                 Image(systemName: systemImage)

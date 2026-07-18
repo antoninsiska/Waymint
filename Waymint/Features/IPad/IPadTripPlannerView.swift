@@ -4,6 +4,7 @@ import SwiftUI
 struct IPadTripPlannerView: View {
     @Environment(\.modelContext) private var modelContext
     @Bindable var trip: TripPlan
+    @Binding var columnVisibility: NavigationSplitViewVisibility
 
     @State private var selectedStopID: UUID?
     @State private var showingNewStop = false
@@ -17,6 +18,7 @@ struct IPadTripPlannerView: View {
     @AppStorage("waymintIPadTimelinePanelWidth") private var timelinePanelWidth = 332.0
 
     private let exportService = WaymintExportService()
+    private let scheduleCalculator = ScheduleCalculator()
 
     private var stops: [TripStop] {
         trip.sortedStops
@@ -33,7 +35,9 @@ struct IPadTripPlannerView: View {
         VStack(spacing: 0) {
             IPadTripPlannerHeader(trip: trip)
 
-            if stops.isEmpty {
+            if columnVisibility != .detailOnly {
+                IPadTripOverviewView(trip: trip)
+            } else if stops.isEmpty {
                 IPadEmptyPlannerState {
                     showingNewStop = true
                 }
@@ -89,15 +93,27 @@ struct IPadTripPlannerView: View {
                     Label("Upravit cestu", systemImage: "slider.horizontal.3")
                 }
 
-                Picker("Zobrazení", selection: $sidePanelMode) {
+                HStack(spacing: 4) {
                     ForEach(IPadPlannerSidePanelMode.allCases) { mode in
-                        Image(systemName: mode.systemImage)
-                            .tag(mode)
-                            .accessibilityLabel(mode.title)
+                        Button {
+                            sidePanelMode = mode
+                            columnVisibility = .detailOnly
+                        } label: {
+                            Image(systemName: mode.systemImage)
+                                .frame(width: 34, height: 28)
+                                .background(
+                                    sidePanelMode == mode
+                                        ? WaymintTheme.lightGreen
+                                        : Color.clear,
+                                    in: RoundedRectangle(cornerRadius: 7)
+                                )
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(mode.title)
                     }
                 }
-                .pickerStyle(.segmented)
-                .frame(width: 170)
+                .padding(3)
+                .background(WaymintTheme.elevatedSurface, in: RoundedRectangle(cornerRadius: 9))
 
                 Button {
                     shareTrip()
@@ -152,7 +168,7 @@ struct IPadTripPlannerView: View {
         for (index, stop) in reordered.enumerated() {
             stop.sortIndex = index
         }
-        trip.updatedAt = .now
+        scheduleCalculator.reconnectAndRecalculate(trip)
     }
 
     private func deleteStops(at offsets: IndexSet) {
@@ -169,7 +185,7 @@ struct IPadTripPlannerView: View {
         if let selectedStopID, deletedIDs.contains(selectedStopID) {
             self.selectedStopID = remainingStops.first?.id
         }
-        trip.updatedAt = .now
+        scheduleCalculator.reconnectAndRecalculate(trip)
     }
 
     private func shareTrip() {
@@ -179,6 +195,247 @@ struct IPadTripPlannerView: View {
             exportErrorMessage = error.localizedDescription
             showingExportError = true
         }
+    }
+}
+
+private struct IPadTripOverviewView: View {
+    let trip: TripPlan
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                HStack(spacing: 12) {
+                    overviewMetric("Čas", value: trip.scheduleLabel, systemImage: "clock")
+                    overviewMetric("Zastávky", value: "\(trip.stopCount)", systemImage: "mappin.and.ellipse")
+                    overviewMetric("Vstupenky", value: "\(trip.ticketCount)", systemImage: "ticket")
+                    overviewMetric("Stav", value: trip.status.title, systemImage: "flag")
+                }
+
+                if !trip.landingTitle.isEmpty || !trip.landingSubtitle.isEmpty || !trip.note.isEmpty {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Label("Informace o cestě", systemImage: "info.circle")
+                            .font(.headline)
+                        if !trip.landingTitle.isEmpty {
+                            Text(trip.landingTitle)
+                                .font(.title3.weight(.bold))
+                        }
+                        if !trip.landingSubtitle.isEmpty {
+                            Text(trip.landingSubtitle)
+                                .foregroundStyle(WaymintTheme.secondaryText)
+                        }
+                        if !trip.note.isEmpty {
+                            Divider()
+                            Text(trip.note)
+                                .font(.subheadline)
+                                .foregroundStyle(WaymintTheme.secondaryText)
+                        }
+                    }
+                    .padding(16)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(WaymintTheme.surface, in: RoundedRectangle(cornerRadius: WaymintTheme.cornerRadius))
+                }
+
+                if !trip.sortedStops.isEmpty {
+                    IPadDayBoardView(trip: trip, selectedStopID: .constant(nil))
+
+                    VStack(alignment: .leading, spacing: 12) {
+                        Label("Program cesty", systemImage: "list.bullet.rectangle")
+                            .font(.headline)
+                        ForEach(Array(trip.sortedStops.enumerated()), id: \.element.id) { index, stop in
+                            HStack(spacing: 12) {
+                                Text("\(index + 1)")
+                                    .font(.caption.weight(.bold))
+                                    .foregroundStyle(.white)
+                                    .frame(width: 28, height: 28)
+                                    .background(WaymintTheme.primaryGreen, in: Circle())
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(stop.title)
+                                        .font(.subheadline.weight(.semibold))
+                                    Text("\(stop.plannedArrival.waymintTime) · \(stop.stopType.title)")
+                                        .font(.caption)
+                                        .foregroundStyle(WaymintTheme.secondaryText)
+                                }
+                                Spacer()
+                                StatusPill(stop.status.title, tint: WaymintTheme.primaryGreen)
+                            }
+                            if index < trip.sortedStops.count - 1 {
+                                Divider()
+                            }
+                        }
+                    }
+                    .padding(16)
+                    .background(WaymintTheme.surface, in: RoundedRectangle(cornerRadius: WaymintTheme.cornerRadius))
+                }
+            }
+            .padding(18)
+        }
+        .background(WaymintTheme.elevatedSurface)
+    }
+
+    private func overviewMetric(_ title: String, value: String, systemImage: String) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label(title, systemImage: systemImage)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(WaymintTheme.secondaryText)
+            Text(value)
+                .font(.headline)
+                .foregroundStyle(WaymintTheme.darkGreen)
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(WaymintTheme.surface, in: RoundedRectangle(cornerRadius: WaymintTheme.cornerRadius))
+    }
+}
+
+struct PhoneLandscapeTripPlannerView: View {
+    @Environment(\.modelContext) private var modelContext
+    @Bindable var trip: TripPlan
+
+    @State private var selectedStopID: UUID?
+    @State private var sidePanelMode = IPadPlannerSidePanelMode.detail
+    @State private var showingNewStop = false
+    @State private var showingNewTicket = false
+    @State private var editingStop: TripStop?
+    private let scheduleCalculator = ScheduleCalculator()
+
+    private var stops: [TripStop] {
+        trip.sortedStops
+    }
+
+    private var selectedStop: TripStop? {
+        if let selectedStopID,
+           let stop = stops.first(where: { $0.id == selectedStopID }) {
+            return stop
+        }
+        return stops.first
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            landscapeHeader
+
+            if stops.isEmpty {
+                IPadEmptyPlannerState {
+                    showingNewStop = true
+                }
+            } else {
+                GeometryReader { proxy in
+                    let timelineWidth = min(340, max(285, proxy.size.width * 0.38))
+
+                    HStack(spacing: 0) {
+                        IPadTimelinePlannerColumn(
+                            trip: trip,
+                            stops: stops,
+                            selectedStopID: $selectedStopID,
+                            editingStop: $editingStop,
+                            onAddStop: { showingNewStop = true },
+                            onMoveStops: moveStops,
+                            onDeleteStops: deleteStops,
+                            isCompact: true
+                        )
+                        .frame(width: timelineWidth)
+
+                        Divider()
+
+                        IPadPlannerSidePanel(
+                            mode: sidePanelMode,
+                            trip: trip,
+                            stop: selectedStop,
+                            onEditStop: { editingStop = $0 },
+                            onAddTicket: { showingNewTicket = true }
+                        )
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    }
+                }
+            }
+        }
+        .background(WaymintTheme.elevatedSurface)
+        .onAppear {
+            selectedStopID = selectedStopID ?? stops.first?.id
+        }
+        .onChange(of: trip.updatedAt) {
+            if selectedStopID == nil || !stops.contains(where: { $0.id == selectedStopID }) {
+                selectedStopID = stops.first?.id
+            }
+        }
+        .sheet(isPresented: $showingNewStop) {
+            StopFormView(trip: trip, stop: nil, nextSortIndex: trip.stopCount)
+        }
+        .sheet(isPresented: $showingNewTicket) {
+            TicketFormView(trip: trip, stop: selectedStop)
+        }
+        .sheet(item: $editingStop) { stop in
+            StopFormView(trip: trip, stop: stop, nextSortIndex: trip.stopCount)
+        }
+    }
+
+    private var landscapeHeader: some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(trip.date.waymintDate)
+                    .font(.caption)
+                    .foregroundStyle(WaymintTheme.secondaryText)
+                Text(trip.title)
+                    .font(.headline)
+                    .lineLimit(1)
+            }
+
+            Spacer(minLength: 8)
+
+            Label(trip.scheduleLabel, systemImage: "clock")
+            Label("\(trip.stopCount)", systemImage: "mappin.and.ellipse")
+
+            HStack(spacing: 2) {
+                ForEach(IPadPlannerSidePanelMode.allCases) { mode in
+                    Button {
+                        sidePanelMode = mode
+                    } label: {
+                        Image(systemName: mode.systemImage)
+                            .frame(width: 32, height: 26)
+                            .background(
+                                sidePanelMode == mode ? WaymintTheme.lightGreen : Color.clear,
+                                in: RoundedRectangle(cornerRadius: 7)
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(mode.title)
+                }
+            }
+            .padding(2)
+            .background(WaymintTheme.elevatedSurface, in: RoundedRectangle(cornerRadius: 8))
+        }
+        .font(.caption.weight(.semibold))
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(WaymintTheme.surface)
+    }
+
+    private func moveStops(from source: IndexSet, to destination: Int) {
+        var reordered = stops
+        reordered.move(fromOffsets: source, toOffset: destination)
+        for (index, stop) in reordered.enumerated() {
+            stop.sortIndex = index
+        }
+        scheduleCalculator.reconnectAndRecalculate(trip)
+    }
+
+    private func deleteStops(at offsets: IndexSet) {
+        let deletedIDs = offsets.compactMap { stops.indices.contains($0) ? stops[$0].id : nil }
+        for index in offsets {
+            guard stops.indices.contains(index) else { continue }
+            modelContext.delete(stops[index])
+        }
+
+        let remainingStops = stops.filter { !deletedIDs.contains($0.id) }
+        for (index, stop) in remainingStops.enumerated() {
+            stop.sortIndex = index
+        }
+        if let selectedStopID, deletedIDs.contains(selectedStopID) {
+            self.selectedStopID = remainingStops.first?.id
+        }
+        scheduleCalculator.reconnectAndRecalculate(trip)
     }
 }
 
@@ -279,6 +536,7 @@ private struct IPadTimelinePlannerColumn: View {
     let onAddStop: () -> Void
     let onMoveStops: (IndexSet, Int) -> Void
     let onDeleteStops: (IndexSet) -> Void
+    var isCompact = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -302,7 +560,8 @@ private struct IPadTimelinePlannerColumn: View {
                                     segment: segment(before: stop),
                                     from: stops[index - 1],
                                     to: stop,
-                                    showsClockTimes: trip.hasFixedStartTime
+                                    showsClockTimes: trip.hasFixedStartTime,
+                                    isCompact: isCompact
                                 )
                             }
 
@@ -313,6 +572,7 @@ private struct IPadTimelinePlannerColumn: View {
                                     isSelected: selectedStopID == stop.id,
                                     inboundSegment: index > 0 ? segment(before: stop) : nil,
                                     showsClockTimes: trip.hasFixedStartTime,
+                                    isCompact: isCompact,
                                     onEdit: { editingStop = stop }
                                 )
                     }
@@ -339,6 +599,7 @@ private struct IPadTimelineSegmentRow: View {
     let from: TripStop
     let to: TripStop
     let showsClockTimes: Bool
+    var isCompact = false
 
     var body: some View {
         HStack(alignment: .top, spacing: 14) {
@@ -357,28 +618,44 @@ private struct IPadTimelineSegmentRow: View {
             }
             .frame(width: 42)
 
-            VStack(alignment: .leading, spacing: 8) {
-                HStack(alignment: .firstTextBaseline) {
-                    Text("Dojezd tam")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(WaymintTheme.primaryText)
-                    Spacer()
-                    Text(totalTravelMinutes.minutesLabel)
-                        .font(.subheadline.weight(.bold))
-                        .foregroundStyle(WaymintTheme.darkGreen)
-                }
+            Group {
+                if isCompact {
+                    HStack(spacing: 8) {
+                        Image(systemName: segment?.transportMode.systemImage ?? "arrow.right")
+                        Text(totalTravelMinutes.minutesLabel)
+                            .fontWeight(.bold)
+                            .foregroundStyle(WaymintTheme.darkGreen)
+                        Spacer()
+                        Text(showsClockTimes ? "\(from.plannedDeparture.waymintTime) → \(to.plannedArrival.waymintTime)" : "Po předchozí")
+                    }
+                    .font(.caption)
+                    .foregroundStyle(WaymintTheme.secondaryText)
+                    .lineLimit(1)
+                } else {
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack(alignment: .firstTextBaseline) {
+                            Text("Dojezd tam")
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(WaymintTheme.primaryText)
+                            Spacer()
+                            Text(totalTravelMinutes.minutesLabel)
+                                .font(.subheadline.weight(.bold))
+                                .foregroundStyle(WaymintTheme.darkGreen)
+                        }
 
-                HStack(spacing: 10) {
-                    Label(segment?.transportMode.title ?? "Přesun", systemImage: segment?.transportMode.systemImage ?? "arrow.right")
-                    Text(showsClockTimes ? "\(from.plannedDeparture.waymintTime) → \(to.plannedArrival.waymintTime)" : "Po předchozí zastávce")
-                    if let buffer = segment?.bufferMinutes, buffer > 0 {
-                        Text("+ \(buffer.minutesLabel) rezerva")
+                        HStack(spacing: 10) {
+                            Label(segment?.transportMode.title ?? "Přesun", systemImage: segment?.transportMode.systemImage ?? "arrow.right")
+                            Text(showsClockTimes ? "\(from.plannedDeparture.waymintTime) → \(to.plannedArrival.waymintTime)" : "Po předchozí zastávce")
+                            if let buffer = segment?.bufferMinutes, buffer > 0 {
+                                Text("+ \(buffer.minutesLabel) rezerva")
+                            }
+                        }
+                        .font(.caption)
+                        .foregroundStyle(WaymintTheme.secondaryText)
                     }
                 }
-                .font(.caption)
-                .foregroundStyle(WaymintTheme.secondaryText)
             }
-            .padding(12)
+            .padding(isCompact ? 10 : 12)
             .background(WaymintTheme.elevatedSurface, in: RoundedRectangle(cornerRadius: WaymintTheme.cornerRadius))
         }
         .padding(.leading, 4)
@@ -400,6 +677,7 @@ private struct IPadTimelineStopRow: View {
     let isSelected: Bool
     let inboundSegment: TravelSegment?
     let showsClockTimes: Bool
+    var isCompact = false
     let onEdit: () -> Void
 
     var body: some View {
@@ -427,12 +705,20 @@ private struct IPadTimelineStopRow: View {
                             .foregroundStyle(WaymintTheme.secondaryText)
                     }
                     Spacer()
-                    StatusPill(isStart ? "Start" : stop.status.title, systemImage: isStart ? "flag.fill" : nil, tint: statusColor)
+                    if isCompact {
+                        Image(systemName: isStart ? "flag.fill" : "circle.fill")
+                            .font(.caption)
+                            .foregroundStyle(statusColor)
+                            .accessibilityLabel(isStart ? "Start" : stop.status.title)
+                    } else {
+                        StatusPill(isStart ? "Start" : stop.status.title, systemImage: isStart ? "flag.fill" : nil, tint: statusColor)
+                    }
                 }
 
                 HStack {
                     Label(stop.title, systemImage: stop.stopType.systemImage)
                         .font(.headline)
+                        .lineLimit(isCompact ? 2 : nil)
                     Spacer()
                     Button(action: onEdit) {
                         Image(systemName: "pencil")
@@ -444,24 +730,13 @@ private struct IPadTimelineStopRow: View {
                     .buttonStyle(.plain)
                 }
 
-                if !stop.mainReason.isEmpty {
+                if !isCompact && !stop.mainReason.isEmpty {
                     Text(stop.mainReason)
                         .font(.subheadline)
                         .foregroundStyle(WaymintTheme.secondaryText)
                 }
 
-                HStack(spacing: 12) {
-                    if isStart {
-                        Label("Začátek cesty", systemImage: "location.fill")
-                    } else {
-                        Label("Na místě \(stop.plannedVisitDurationMinutes.minutesLabel)", systemImage: "timer")
-                        Label("Dojezd \(inboundTravelMinutes.minutesLabel)", systemImage: "arrow.right")
-                    }
-                    Label(stop.isRequired ? "Povinná" : "Volitelná", systemImage: stop.isRequired ? "exclamationmark.circle" : "circle")
-                    if stop.ticketCount > 0 {
-                        Label("\(stop.ticketCount)", systemImage: "ticket")
-                    }
-                }
+                compactMetadata
                 .font(.caption)
                 .foregroundStyle(WaymintTheme.secondaryText)
             }
@@ -496,6 +771,26 @@ private struct IPadTimelineStopRow: View {
     private var inboundTravelMinutes: Int {
         guard let inboundSegment else { return 0 }
         return max(0, inboundSegment.plannedDurationMinutes + inboundSegment.bufferMinutes)
+    }
+
+    private var compactMetadata: some View {
+        HStack(spacing: 14) {
+            if isStart {
+                Image(systemName: "location.fill")
+                    .accessibilityLabel("Začátek cesty")
+            } else {
+                Label("\(stop.plannedVisitDurationMinutes)", systemImage: "timer")
+                    .accessibilityLabel("Na místě \(stop.plannedVisitDurationMinutes) minut")
+                Label("\(inboundTravelMinutes)", systemImage: "arrow.right")
+                    .accessibilityLabel("Dojezd \(inboundTravelMinutes) minut")
+            }
+            Image(systemName: stop.isRequired ? "exclamationmark.circle" : "circle")
+                .accessibilityLabel(stop.isRequired ? "Povinná" : "Volitelná")
+            if stop.ticketCount > 0 {
+                Label("\(stop.ticketCount)", systemImage: "ticket")
+            }
+        }
+        .lineLimit(1)
     }
 
     private var primaryTimeLabel: String {
@@ -860,7 +1155,10 @@ private extension View {
 
 #Preview {
     NavigationStack {
-        IPadTripPlannerView(trip: TripPlan(title: "Centrum"))
+        IPadTripPlannerView(
+            trip: TripPlan(title: "Centrum"),
+            columnVisibility: .constant(.all)
+        )
     }
     .modelContainer(PreviewData.container())
 }

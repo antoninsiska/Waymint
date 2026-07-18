@@ -19,5 +19,91 @@ struct ScheduleCalculator {
         let next = ordered[index + 1]
         return (next, stop.plannedDeparture)
     }
-}
 
+    func recalculateFromArrival(
+        _ arrival: Date,
+        at startIndex: Int,
+        stops: [TripStop],
+        segments: [TravelSegment]
+    ) {
+        guard stops.indices.contains(startIndex) else { return }
+
+        stops[startIndex].plannedArrival = arrival
+        stops[startIndex].plannedDeparture = plannedDeparture(
+            arrival: arrival,
+            visitDurationMinutes: stops[startIndex].plannedVisitDurationMinutes
+        )
+
+        guard startIndex + 1 < stops.count else { return }
+        for index in (startIndex + 1)..<stops.count {
+            let previous = stops[index - 1]
+            let stop = stops[index]
+            let segment = segments.first { $0.toStopID == stop.id }
+            let travelMinutes = max(0, segment?.plannedDurationMinutes ?? inferredTravelMinutes(from: previous, to: stop))
+            let bufferMinutes = max(0, segment?.bufferMinutes ?? 0)
+            let nextArrival = previous.plannedDeparture.addingTimeInterval(TimeInterval((travelMinutes + bufferMinutes) * 60))
+            stop.plannedArrival = nextArrival
+            stop.plannedDeparture = plannedDeparture(
+                arrival: nextArrival,
+                visitDurationMinutes: stop.plannedVisitDurationMinutes
+            )
+            segment?.plannedDeparture = previous.plannedDeparture
+        }
+    }
+
+    func recalculateTrip(_ trip: TripPlan, anchor: Date? = nil) {
+        let stops = trip.sortedStops
+        guard let first = stops.first else { return }
+        recalculateFromArrival(
+            anchor ?? first.plannedArrival,
+            at: 0,
+            stops: stops,
+            segments: trip.sortedTravelSegments
+        )
+        trip.updatedAt = .now
+    }
+
+    func reconnectAndRecalculate(_ trip: TripPlan) {
+        let stops = trip.sortedStops
+        let segments = trip.sortedTravelSegments
+        guard let first = stops.first else { return }
+
+        let requiredSegmentCount = max(0, stops.count - 1)
+        for index in segments.indices {
+            segments[index].sortIndex = index
+            if index < requiredSegmentCount {
+                segments[index].fromStopID = stops[index].id
+                segments[index].toStopID = stops[index + 1].id
+            } else {
+                // A deleted stop can leave an unused segment in SwiftData. Disconnect
+                // it so it cannot be selected accidentally during later recalculations.
+                segments[index].fromStopID = nil
+                segments[index].toStopID = nil
+            }
+        }
+        recalculateTrip(trip, anchor: first.plannedArrival)
+    }
+
+    func recalculateAfterDeparture(
+        _ departure: Date,
+        from completedIndex: Int,
+        stops: [TripStop],
+        segments: [TravelSegment]
+    ) {
+        guard stops.indices.contains(completedIndex) else { return }
+        stops[completedIndex].plannedDeparture = departure
+        let nextIndex = completedIndex + 1
+        guard stops.indices.contains(nextIndex) else { return }
+
+        let next = stops[nextIndex]
+        let segment = segments.first { $0.toStopID == next.id }
+        let travelMinutes = max(0, segment?.plannedDurationMinutes ?? inferredTravelMinutes(from: stops[completedIndex], to: next))
+        let bufferMinutes = max(0, segment?.bufferMinutes ?? 0)
+        let arrival = departure.addingTimeInterval(TimeInterval((travelMinutes + bufferMinutes) * 60))
+        recalculateFromArrival(arrival, at: nextIndex, stops: stops, segments: segments)
+    }
+
+    private func inferredTravelMinutes(from: TripStop, to: TripStop) -> Int {
+        max(0, Int(to.plannedArrival.timeIntervalSince(from.plannedDeparture) / 60))
+    }
+}

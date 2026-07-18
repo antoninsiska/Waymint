@@ -68,7 +68,7 @@ struct WaymintTripLiveActivity: Widget {
         } dynamicIsland: { context in
             DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
-                    BrandPill()
+                    ExpandedWaymintBrand()
                         .padding(.leading, 10)
                 }
 
@@ -106,17 +106,11 @@ struct WaymintTripLiveActivity: Widget {
                     .padding(.top, 1)
                 }
             } compactLeading: {
-                CompactPhaseIcon(phaseTitle: context.state.phaseTitle)
-                    .padding(.leading, 2)
+                CompactWaymintMark(phaseTitle: context.state.phaseTitle)
             } compactTrailing: {
-                Text(context.state.remainingMinutes.compactMinutesText)
-                    .font(.system(size: 10, weight: .bold, design: .rounded))
-                    .monospacedDigit()
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.78)
-                    .padding(.trailing, 2)
+                CompactCountdown(targetDate: context.state.targetDate)
             } minimal: {
-                CompactPhaseIcon(phaseTitle: context.state.phaseTitle)
+                CompactWaymintMark(phaseTitle: context.state.phaseTitle, minimal: true)
             }
             .widgetURL(URL(string: "waymint://active-trip/\(context.attributes.tripID.uuidString)"))
             .keylineTint(Color(red: 0.16, green: 0.45, blue: 0.31))
@@ -124,14 +118,76 @@ struct WaymintTripLiveActivity: Widget {
     }
 }
 
-private struct BrandPill: View {
+private struct ExpandedWaymintBrand: View {
     var body: some View {
-        Text("WM")
-            .font(.system(size: 9, weight: .black, design: .rounded))
-            .foregroundStyle(.white)
-            .frame(width: 32, height: 22)
-            .background(Color(red: 0.16, green: 0.45, blue: 0.31), in: Capsule())
+        HStack(spacing: 5) {
+            Text("W")
+                .font(.system(size: 12, weight: .black, design: .rounded))
+                .foregroundStyle(Color(red: 0.56, green: 0.95, blue: 0.70))
+            Image(systemName: "point.topleft.down.curvedto.point.bottomright.up")
+                .font(.system(size: 8, weight: .black))
+                .foregroundStyle(.white.opacity(0.72))
+        }
+        .frame(width: 42, height: 27)
+        .background(
+            LinearGradient(
+                colors: [Color(red: 0.12, green: 0.42, blue: 0.28), Color(red: 0.06, green: 0.25, blue: 0.18)],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            ),
+            in: Capsule()
+        )
+        .overlay { Capsule().stroke(.white.opacity(0.13), lineWidth: 0.7) }
             .accessibilityLabel("Waymint")
+    }
+}
+
+private struct CompactWaymintMark: View {
+    let phaseTitle: String
+    var minimal = false
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .fill(
+                    LinearGradient(
+                        colors: [Color(red: 0.26, green: 0.72, blue: 0.48), Color(red: 0.08, green: 0.32, blue: 0.22)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+            Text("W")
+                .font(.system(size: minimal ? 10 : 9, weight: .black, design: .rounded))
+                .foregroundStyle(.white)
+            Circle()
+                .stroke(Color(red: 0.56, green: 0.95, blue: 0.70).opacity(0.72), lineWidth: 1)
+        }
+        .frame(width: minimal ? 22 : 20, height: minimal ? 22 : 20)
+        .overlay(alignment: .bottomTrailing) {
+            Image(systemName: phaseTitle == "Na místě" ? "circle.fill" : "arrow.up.right")
+                .font(.system(size: 5, weight: .black))
+                .foregroundStyle(Color(red: 0.56, green: 0.95, blue: 0.70))
+                .padding(2)
+                .background(.black, in: Circle())
+                .offset(x: 2, y: 2)
+        }
+        .padding(.leading, minimal ? 0 : 2)
+        .accessibilityLabel("Waymint · \(phaseTitle)")
+    }
+}
+
+private struct CompactCountdown: View {
+    let targetDate: Date
+
+    var body: some View {
+        Text(timerInterval: Date()...max(targetDate, Date()), countsDown: true)
+            .font(.system(size: 11, weight: .black, design: .rounded))
+            .monospacedDigit()
+            .foregroundStyle(Color(red: 0.70, green: 1.0, blue: 0.82))
+            .lineLimit(1)
+            .minimumScaleFactor(0.72)
+            .padding(.trailing, 3)
+            .contentTransition(.numericText(countsDown: true))
     }
 }
 
@@ -219,7 +275,7 @@ private struct DynamicIslandTimePill: View {
 
     var body: some View {
         VStack(spacing: 1) {
-            Text(context.state.remainingMinutes.compactMinutesText)
+            Text(timerInterval: Date()...max(context.state.targetDate, Date()), countsDown: true)
                 .font(.system(size: 12, weight: .black, design: .rounded))
                 .monospacedDigit()
                 .foregroundStyle(.white)
@@ -325,7 +381,7 @@ private struct LockScreenHeader: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            BrandPill()
+            ExpandedWaymintBrand()
 
             Text(context.attributes.tripTitle)
                 .font(.system(size: 12, weight: .bold, design: .rounded))
@@ -363,7 +419,7 @@ private struct LockScreenTimeBlock: View {
 
     var body: some View {
         VStack(alignment: .trailing, spacing: 4) {
-            Text(context.state.remainingMinutes.compactMinutesText)
+            Text(timerInterval: Date()...max(context.state.targetDate, Date()), countsDown: true)
                 .font(.system(size: 30, weight: .black, design: .rounded))
                 .monospacedDigit()
                 .foregroundStyle(.white)

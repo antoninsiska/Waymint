@@ -15,6 +15,9 @@ final class CityPlan {
     @Relationship(deleteRule: .cascade, inverse: \TripPlan.city)
     var tripPlans: [TripPlan]?
 
+    @Relationship(deleteRule: .cascade, inverse: \PlaceBankItem.city)
+    var bankPlaces: [PlaceBankItem]?
+
     init(
         id: UUID = UUID(),
         name: String,
@@ -24,7 +27,8 @@ final class CityPlan {
         sortIndex: Int = 0,
         createdAt: Date = .now,
         updatedAt: Date = .now,
-        tripPlans: [TripPlan] = []
+        tripPlans: [TripPlan] = [],
+        bankPlaces: [PlaceBankItem] = []
     ) {
         self.id = id
         self.name = name
@@ -35,6 +39,7 @@ final class CityPlan {
         self.createdAt = createdAt
         self.updatedAt = updatedAt
         self.tripPlans = tripPlans
+        self.bankPlaces = bankPlaces
     }
 
     var sortedTripPlans: [TripPlan] {
@@ -48,6 +53,15 @@ final class CityPlan {
 
     var tripPlanCount: Int {
         tripPlans?.count ?? 0
+    }
+
+    var sortedBankPlaces: [PlaceBankItem] {
+        (bankPlaces ?? []).sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
+    }
+
+    func addBankPlace(_ place: PlaceBankItem) {
+        if bankPlaces == nil { bankPlaces = [] }
+        bankPlaces?.append(place)
     }
 
     func addTripPlan(_ trip: TripPlan) {
