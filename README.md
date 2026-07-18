@@ -5,12 +5,11 @@
 <h1 align="center">Waymint</h1>
 
 <p align="center">
-  A private, local-first home for planning trips from the first idea to the journey home.
+Travel companion for iPhone and iPad that helps you plan, organize, and experience your trips from start to finish.
 </p>
 
-Waymint is a local-first trip planner for iPhone and iPad. It keeps itineraries, stops, tickets, checklists, maps, and trip summaries together without requiring an account or a backend.
 
-The repository also contains a complete static web experience in [`docs/`](docs/): an animated product landing page and a browser-based trip planner. It can be published directly with GitHub Pages and can exchange Waymint export files with the iOS app.
+Create detailed itineraries with destinations, attractions, restaurants, transport, tickets, notes, checklists, and schedules. During your journey, Waymint keeps everything in one place, guides you through your itinerary, and helps you stay on schedule so you can focus on exploring instead of constantly checking maps, notes, and bookings.
 
 ## Highlights
 
