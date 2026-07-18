@@ -6,11 +6,11 @@
 
 <p align="center">
 Travel companion for iPhone and iPad that helps you plan, organize, and experience your trips from start to finish.
-</p>
+
 
 
 Create detailed itineraries with destinations, attractions, restaurants, transport, tickets, notes, checklists, and schedules. During your journey, Waymint keeps everything in one place, guides you through your itinerary, and helps you stay on schedule so you can focus on exploring instead of constantly checking maps, notes, and bookings.
-
+</p>
 ## Highlights
 
 - SwiftUI interface for iPhone and iPad
