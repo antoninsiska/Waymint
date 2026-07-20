@@ -6,8 +6,9 @@ enum PlaceBankImporter {
     static func importExistingStops(from cities: [CityPlan], modelContext: ModelContext) {
         for city in cities {
             PlaceBankDeduplicator.consolidate(in: city, modelContext: modelContext)
+            var knownPlaces = city.sortedBankPlaces
             for stop in city.sortedTripPlans.flatMap(\.sortedStops) where stop.stopType != .transfer {
-                guard !city.sortedBankPlaces.contains(where: {
+                guard !knownPlaces.contains(where: {
                     PlaceBankDeduplicator.matches(
                         title: stop.title,
                         address: stop.address,
@@ -31,6 +32,7 @@ enum PlaceBankImporter {
                 place.city = city
                 city.addBankPlace(place)
                 modelContext.insert(place)
+                knownPlaces.append(place)
             }
         }
     }

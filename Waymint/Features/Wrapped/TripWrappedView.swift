@@ -1,4 +1,5 @@
 import CoreLocation
+import MapKit
 import SwiftUI
 internal import Photos
 import UIKit
@@ -7,36 +8,84 @@ struct CityWrappedView: View {
     let city: CityPlan
 
     @State private var photos: [UIImage] = []
+    @State private var selectedPage = 0
 
     private var stats: CityWrappedStats {
         CityWrappedStats(city: city)
     }
 
     var body: some View {
-        TabView {
-            WrappedHeroSlide(city: city, stats: stats, photos: photos)
+        TabView(selection: $selectedPage) {
+            WrappedHeroSlide(city: city, stats: stats, photos: photos).tag(0)
+            WrappedRouteSlide(city: city, stats: stats).tag(1)
             WrappedNumberSlide(
                 title: "Čas ve městě",
                 value: stats.totalCityTimeLabel,
                 subtitle: "Součet všech naplánovaných dní ve městě.",
                 systemImage: "clock.fill",
                 colors: [.green, .mint, .teal]
-            )
+            ).tag(2)
             WrappedNumberSlide(
                 title: "Procestováno",
                 value: stats.distanceLabel,
                 subtitle: stats.distanceSubtitle,
                 systemImage: "point.topleft.down.curvedto.point.bottomright.up",
                 colors: [.purple, .blue, .cyan]
-            )
-            WrappedTopStopSlide(stats: stats, photos: photos)
-            WrappedRecapSlide(stats: stats, photos: photos)
+            ).tag(3)
+            WrappedTopStopSlide(stats: stats, photos: photos).tag(4)
+            WrappedRecapSlide(stats: stats, photos: photos).tag(5)
         }
         .tabViewStyle(.page)
+        .indexViewStyle(.page(backgroundDisplayMode: .never))
+        .overlay(alignment: .bottom) {
+            HStack(spacing: 7) {
+                ForEach(0..<6, id: \.self) { index in
+                    Capsule()
+                        .fill(.white.opacity(index == selectedPage ? 1 : 0.35))
+                        .frame(width: index == selectedPage ? 24 : 7, height: 7)
+                        .animation(.snappy, value: selectedPage)
+                }
+            }
+            .padding(.bottom, 24)
+        }
         .ignoresSafeArea()
         .background(.black)
         .task(id: stats.albumIdentifiers.joined(separator: "|")) {
             photos = await CityWrappedPhotoLoader.loadPhotos(albumIdentifiers: stats.albumIdentifiers, limit: 10)
+        }
+    }
+}
+
+private struct WrappedRouteSlide: View {
+    let city: CityPlan
+    let stats: CityWrappedStats
+
+    var body: some View {
+        ZStack(alignment: .bottomLeading) {
+            Map(initialPosition: .region(stats.mapRegion)) {
+                ForEach(Array(stats.routePolylines.enumerated()), id: \.offset) { _, polyline in
+                    MapPolyline(polyline)
+                        .stroke(.white, style: StrokeStyle(lineWidth: 6, lineCap: .round, lineJoin: .round))
+                }
+            }
+            .mapStyle(.standard(pointsOfInterest: .excludingAll))
+            .allowsHitTesting(false)
+            .overlay(
+                LinearGradient(colors: [.clear, Color(red: 0.03, green: 0.13, blue: 0.09).opacity(0.94)], startPoint: .center, endPoint: .bottom)
+            )
+
+            VStack(alignment: .leading, spacing: 10) {
+                Text("TVŮJ OTISK VE MĚSTĚ")
+                    .font(.caption.weight(.black)).tracking(1.4).foregroundStyle(.white.opacity(0.72))
+                Text(city.name)
+                    .font(.system(size: 46, weight: .black, design: .rounded)).foregroundStyle(.white)
+                HStack(spacing: 10) {
+                    WrappedMiniMetric(value: stats.distanceLabel, label: "na trase", systemImage: "map.fill")
+                    WrappedMiniMetric(value: "\(stats.stopCount)", label: "míst", systemImage: "mappin")
+                }
+            }
+            .padding(28)
+            .padding(.bottom, 36)
         }
     }
 }
@@ -172,6 +221,7 @@ private struct WrappedRecapSlide: View {
                 WrappedRecapRow(value: "\(stats.ticketCount)", label: "vstupenek", systemImage: "ticket.fill")
                 WrappedRecapRow(value: stats.travelTimeLabel, label: "v přesunech", systemImage: "arrow.right")
                 WrappedRecapRow(value: stats.requiredStopRatioLabel, label: "povinných bodů", systemImage: "checkmark.seal.fill")
+                WrappedRecapRow(value: stats.completedRatioLabel, label: "dokončeno", systemImage: "flag.checkered")
 
                 Spacer()
             }
@@ -217,7 +267,7 @@ private struct WrappedMiniMetric: View {
         Label {
             Text(value)
                 .font(.headline.weight(.black))
-            Text(label)
+            Text(LocalizedStringKey(label))
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(.white.opacity(0.76))
         } icon: {
@@ -248,7 +298,7 @@ private struct WrappedRecapRow: View {
                 Text(value)
                     .font(.title2.weight(.black))
                     .foregroundStyle(.white)
-                Text(label)
+                Text(LocalizedStringKey(label))
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.white.opacity(0.74))
             }
@@ -385,6 +435,41 @@ private struct CityWrappedStats {
         let required = allStops.filter(\.isRequired).count
         let ratio = Double(required) / Double(stopCount) * 100
         return "\(ratio.formatted(.number.precision(.fractionLength(0)))) %"
+    }
+
+    var completedRatioLabel: String {
+        guard stopCount > 0 else { return "0 %" }
+        let completed = allStops.filter { $0.status == .completed }.count
+        return "\((Double(completed) / Double(stopCount) * 100).formatted(.number.precision(.fractionLength(0)))) %"
+    }
+
+    var routePolylines: [MKPolyline] {
+        trips.compactMap { trip in
+            var coordinates = trip.sortedStops.compactMap { stop -> CLLocationCoordinate2D? in
+                guard let latitude = stop.latitude, let longitude = stop.longitude else { return nil }
+                return CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
+            }
+            guard coordinates.count > 1 else { return nil }
+            return MKPolyline(coordinates: &coordinates, count: coordinates.count)
+        }
+    }
+
+    var mapRegion: MKCoordinateRegion {
+        let coordinates = trips.flatMap(\.sortedStops).compactMap { stop -> CLLocationCoordinate2D? in
+            guard let latitude = stop.latitude, let longitude = stop.longitude else { return nil }
+            return CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
+        }
+        guard let first = coordinates.first else {
+            return MKCoordinateRegion(center: CLLocationCoordinate2D(latitude: 50.08, longitude: 14.44), span: MKCoordinateSpan(latitudeDelta: 0.08, longitudeDelta: 0.08))
+        }
+        let minLat = coordinates.map(\.latitude).min() ?? first.latitude
+        let maxLat = coordinates.map(\.latitude).max() ?? first.latitude
+        let minLon = coordinates.map(\.longitude).min() ?? first.longitude
+        let maxLon = coordinates.map(\.longitude).max() ?? first.longitude
+        return MKCoordinateRegion(
+            center: .init(latitude: (minLat + maxLat) / 2, longitude: (minLon + maxLon) / 2),
+            span: .init(latitudeDelta: max(0.02, (maxLat - minLat) * 1.5), longitudeDelta: max(0.02, (maxLon - minLon) * 1.5))
+        )
     }
 
     var albumIdentifiers: [String] {

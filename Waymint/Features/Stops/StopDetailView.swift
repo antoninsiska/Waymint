@@ -22,7 +22,11 @@ struct StopDetailView: View {
             Section {
                 VStack(alignment: .leading, spacing: 12) {
                     HStack {
-                        Label(stop.stopType.title, systemImage: stop.stopType.systemImage)
+                        Label {
+                            Text(LocalizedStringKey(stop.stopType.title))
+                        } icon: {
+                            Image(systemName: stop.stopType.systemImage)
+                        }
                         Spacer()
                         StatusPill(stop.status.title)
                     }
@@ -39,7 +43,7 @@ struct StopDetailView: View {
             }
 
             if !stop.mainReason.isEmpty {
-                Section("Proc sem jdu") {
+                Section("Proč sem jdu") {
                     Text(stop.mainReason)
                         .font(.headline)
                 }
@@ -52,7 +56,7 @@ struct StopDetailView: View {
                 .onDelete(perform: deleteChecklistItems)
 
                 HStack {
-                    TextField("Pridat polozku", text: $newChecklistTitle)
+                    TextField("Přidat položku", text: $newChecklistTitle)
                     Button {
                         addChecklistItem()
                     } label: {
@@ -62,7 +66,7 @@ struct StopDetailView: View {
                 }
             }
 
-            Section("Misto") {
+            Section("Místo") {
                 if !stop.address.isEmpty {
                     Label(stop.address, systemImage: "location")
                 }
@@ -81,26 +85,26 @@ struct StopDetailView: View {
                     Button {
                         openInMaps(latitude: latitude, longitude: longitude)
                     } label: {
-                        Label("Otevrit v Apple Maps", systemImage: "map")
+                        Label("Otevřít v Apple Maps", systemImage: "map")
                     }
                 } else {
-                    Text("Souradnice zatim nejsou vyplnene.")
+                    Text("Souřadnice zatím nejsou vyplněné.")
                         .foregroundStyle(WaymintTheme.secondaryText)
                 }
             }
 
             if !stop.note.isEmpty {
-                Section("Poznamka") {
+                Section("Poznámka") {
                     Text(stop.note)
                 }
             }
 
             Section("Vstupenky") {
                 if stop.ticketCount == 0 {
-                    Text("Zatim zadna vstupenka.")
+                    Text("Zatím žádná vstupenka.")
                         .foregroundStyle(WaymintTheme.secondaryText)
                 } else {
-                    ForEach(stop.sortedTickets) { ticket in
+                    ForEach(stop.sortedTickets.filter(\.isUsableTicket)) { ticket in
                         TicketRowView(
                             ticket: ticket,
                             onOpen: { open(ticket) },
@@ -114,11 +118,11 @@ struct StopDetailView: View {
                 Button {
                     showingTicketForm = true
                 } label: {
-                    Label("Pridat textovou vstupenku", systemImage: "ticket")
+                    Label("Přidat vstupenku", systemImage: "ticket")
                 }
             }
         }
-        .navigationTitle("Zastavka")
+        .navigationTitle("Zastávka")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
@@ -171,7 +175,7 @@ struct StopDetailView: View {
                 editingTicket = nil
                 ticketToDelete = nil
             }
-            Button("Zrusit", role: .cancel) {
+            Button("Zrušit", role: .cancel) {
                 ticketToDelete = nil
             }
         }
@@ -180,9 +184,9 @@ struct StopDetailView: View {
     private var scheduleText: String {
         guard stop.tripPlan?.hasFixedStartTime ?? true else {
             if stop.tripPlan?.sortedStops.first?.id == stop.id {
-                return "Start bez pevného času"
+                return WaymintLocalization.text("Start bez pevného času")
             }
-            return "Na místě \(stop.plannedVisitDurationMinutes.minutesLabel)"
+            return WaymintLocalization.format("Na místě %@", stop.plannedVisitDurationMinutes.minutesLabel)
         }
         return "\(stop.plannedArrival.waymintTime)-\(stop.plannedDeparture.waymintTime) · \(stop.plannedVisitDurationMinutes.minutesLabel)"
     }
@@ -202,7 +206,7 @@ struct StopDetailView: View {
     }
 
     private func deleteTickets(at offsets: IndexSet) {
-        let tickets = stop.sortedTickets
+        let tickets = stop.sortedTickets.filter(\.isUsableTicket)
         for index in offsets {
             ticketStorage.deleteLocalFile(at: tickets[index].localFilePath)
             modelContext.delete(tickets[index])
@@ -268,7 +272,7 @@ private struct ChecklistItemRow: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(item.title)
-        .accessibilityValue(item.isDone ? "Hotovo" : "Nedokonceno")
+        .accessibilityValue(Text(LocalizedStringKey(item.isDone ? "Hotovo" : "Nedokončeno")))
     }
 }
 

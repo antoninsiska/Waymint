@@ -39,6 +39,10 @@ struct StopFormView: View {
     @State private var bankPlaceHighlights = ""
     @State private var selectedBankPlace: PlaceBankItem?
     @State private var showingBankPlacePicker = false
+    @State private var saveToPlaceBank = false
+    @State private var updateSourceBankPlace = false
+    @State private var isTimeAnchor = false
+    @State private var routeEstimationID = UUID()
     @AppStorage("waymintPlaceBankEnabled") private var placeBankEnabled = false
 
     private let calculator = ScheduleCalculator()
@@ -62,7 +66,7 @@ struct StopFormView: View {
                             Text(selectedBankPlace.mainReason)
                                 .foregroundStyle(WaymintTheme.secondaryText)
                         }
-                        Label("Doporučený čas: \(plannedVisitDurationMinutes.minutesLabel)", systemImage: "clock")
+                        Label(WaymintLocalization.format("Doporučený čas: %@", plannedVisitDurationMinutes.minutesLabel), systemImage: "clock")
                         Button("Vybrat jiné místo") {
                             self.selectedBankPlace = nil
                         }
@@ -72,12 +76,12 @@ struct StopFormView: View {
                         Section("Jak se tam dostanu") {
                             Picker("Doprava", selection: $transportMode) {
                                 ForEach(TransportMode.allCases) { mode in
-                                    Label(mode.title, systemImage: mode.systemImage).tag(mode)
+                                    Label { Text(LocalizedStringKey(mode.title)) } icon: { Image(systemName: mode.systemImage) }.tag(mode)
                                 }
                             }
                             .onChange(of: transportMode) { _, _ in estimateRouteIfPossible() }
 
-                            Stepper("Doba přesunu: \(travelDurationMinutes.minutesLabel)", value: $travelDurationMinutes, in: 0...240, step: 5)
+                            Stepper(WaymintLocalization.format("Doba přesunu: %@", travelDurationMinutes.minutesLabel), value: $travelDurationMinutes, in: 1...240, step: 5)
                                 .onChange(of: travelDurationMinutes) { _, _ in updateArrivalFromTravel() }
                             Stepper("Rezerva: \(travelBufferMinutes.minutesLabel)", value: $travelBufferMinutes, in: 0...120, step: 5)
                                 .onChange(of: travelBufferMinutes) { _, _ in updateArrivalFromTravel() }
@@ -110,7 +114,7 @@ struct StopFormView: View {
                     TextField(isFirstStop ? "Odkud cesta začíná" : "Název zastávky", text: $title)
                     Picker("Typ", selection: $stopType) {
                         ForEach(StopType.allCases) { type in
-                            Label(type.title, systemImage: type.systemImage).tag(type)
+                            Label { Text(LocalizedStringKey(type.title)) } icon: { Image(systemName: type.systemImage) }.tag(type)
                         }
                     }
                     .onChange(of: stopType) { _, newValue in
@@ -122,10 +126,10 @@ struct StopFormView: View {
                     }
                     Picker("Stav", selection: $status) {
                         ForEach(StopStatus.allCases) { status in
-                            Text(status.title).tag(status)
+                            Text(LocalizedStringKey(status.title)).tag(status)
                         }
                     }
-                    Toggle("Povinna zastavka", isOn: $isRequired)
+                    Toggle("Povinná zastávka", isOn: $isRequired)
 
                     if isFirstStop {
                         Label("První bod se v plánu bere jako start. Další zastávky už ukazují dojezd z tohohle místa.", systemImage: "flag.checkered")
@@ -134,22 +138,38 @@ struct StopFormView: View {
                     }
                 }
 
-                Section("Cas") {
+                Section("Čas") {
                     DatePicker(isFirstStop ? "Začátek" : "Příchod", selection: $plannedArrival, displayedComponents: [.date, .hourAndMinute])
                     if stopType == .transfer {
                         Label("Přesun nemá délku návštěvy. Odchod se bere podle příchodu.", systemImage: "arrow.right")
                             .font(.caption)
                             .foregroundStyle(WaymintTheme.secondaryText)
                     } else {
-                        Stepper(isFirstStop ? "Čas na startu: \(plannedVisitDurationMinutes.minutesLabel)" : "Délka návštěvy: \(plannedVisitDurationMinutes.minutesLabel)", value: $plannedVisitDurationMinutes, in: 0...480, step: 5)
+                        Stepper(
+                            WaymintLocalization.format(
+                                isFirstStop ? "Čas na startu: %@" : "Délka návštěvy: %@",
+                                plannedVisitDurationMinutes.minutesLabel
+                            ),
+                            value: $plannedVisitDurationMinutes,
+                            in: 0...480,
+                            step: 5
+                        )
                     }
-                    Text("Odchod: \(calculator.plannedDeparture(arrival: plannedArrival, visitDurationMinutes: plannedVisitDurationMinutes).waymintTime)")
+                    Text(WaymintLocalization.format("Odchod: %@", calculator.plannedDeparture(arrival: plannedArrival, visitDurationMinutes: plannedVisitDurationMinutes).waymintTime))
                         .foregroundStyle(WaymintTheme.secondaryText)
+                    if !isFirstStop {
+                        Toggle("Pevný čas / rezervace", isOn: $isTimeAnchor)
+                        if isTimeAnchor {
+                            Text("Tento čas zůstane při automatickém přepočtu zachovaný, například pro trajekt, vlak nebo rezervovaný vstup.")
+                                .font(.caption)
+                                .foregroundStyle(WaymintTheme.secondaryText)
+                        }
+                    }
                 }
 
-                Section("Misto") {
+                Section("Místo") {
                     HStack {
-                        TextField("Najit misto v Apple Mapach", text: $placeSearch.query)
+                        TextField("Najít místo v Apple Mapách", text: $placeSearch.query)
                             .textInputAutocapitalization(.words)
                             .submitLabel(.search)
                             .onSubmit {
@@ -175,7 +195,7 @@ struct StopFormView: View {
 
                     if let selectedCoordinate {
                         Map(position: $mapPickerPosition) {
-                            Marker(title.isEmpty ? "Vybrane misto" : title, coordinate: selectedCoordinate)
+                            Marker(title.isEmpty ? "Vybrané místo" : title, coordinate: selectedCoordinate)
                         }
                         .frame(height: 160)
                         .clipShape(RoundedRectangle(cornerRadius: WaymintTheme.cornerRadius))
@@ -184,7 +204,7 @@ struct StopFormView: View {
                     Button {
                         showingMapPointPicker = true
                     } label: {
-                        Label(selectedCoordinate == nil ? "Vybrat bod na mape" : "Upravit bod na mape", systemImage: "mappin.and.ellipse")
+                        Label(selectedCoordinate == nil ? "Vybrat bod na mapě" : "Upravit bod na mapě", systemImage: "mappin.and.ellipse")
                     }
 
                     if let errorMessage = placeSearch.errorMessage {
@@ -227,10 +247,10 @@ struct StopFormView: View {
                 }
 
                 if !isFirstStop, previousStop != nil {
-                    Section("Presun z predchozi zastavky") {
+                    Section("Přesun z předchozí zastávky") {
                         Picker("Doprava", selection: $transportMode) {
                             ForEach(TransportMode.allCases) { mode in
-                                Label(mode.title, systemImage: mode.systemImage).tag(mode)
+                                Label { Text(LocalizedStringKey(mode.title)) } icon: { Image(systemName: mode.systemImage) }.tag(mode)
                             }
                         }
                         .onChange(of: transportMode) { _, _ in
@@ -238,12 +258,12 @@ struct StopFormView: View {
                         }
 
                         if stopType == .transfer {
-                            Text("Tahle zastavka je oznacena jako presun, proto pocitam navstevu jako 0 minut a hlavni cas beru z trasy.")
+                            Text("Tahle zastávka je označená jako přesun, proto počítám návštěvu jako 0 minut a hlavní čas beru z trasy.")
                                 .font(.caption)
                                 .foregroundStyle(WaymintTheme.secondaryText)
                         }
 
-                        Stepper("Doba presunu: \(travelDurationMinutes.minutesLabel)", value: $travelDurationMinutes, in: 0...240, step: 5)
+                        Stepper(WaymintLocalization.format("Doba přesunu: %@", travelDurationMinutes.minutesLabel), value: $travelDurationMinutes, in: 1...240, step: 5)
                             .onChange(of: travelDurationMinutes) { _, _ in
                                 updateArrivalFromTravel()
                             }
@@ -255,7 +275,7 @@ struct StopFormView: View {
                         Button {
                             estimateRouteIfPossible()
                         } label: {
-                            Label(isEstimatingRoute ? "Pocitam trasu..." : "Spocitat podle Apple Map", systemImage: "map")
+                            Label(isEstimatingRoute ? "Počítám trasu…" : "Spočítat podle Apple Map", systemImage: "map")
                         }
                         .disabled(isEstimatingRoute || selectedCoordinate == nil || previousStopCoordinate == nil)
 
@@ -267,27 +287,38 @@ struct StopFormView: View {
                     }
                 }
 
-                Section("Proc sem jdu") {
-                    TextField("Hlavni tahak", text: $mainReason, axis: .vertical)
+                Section("Proč sem jdu") {
+                    TextField("Hlavní tahák", text: $mainReason, axis: .vertical)
                         .lineLimit(2...4)
-                    TextField("Poznamka", text: $note, axis: .vertical)
+                    TextField("Poznámka", text: $note, axis: .vertical)
                         .lineLimit(3...8)
                 }
 
+                if placeBankEnabled, stop == nil, selectedBankPlace == nil, trip.city != nil {
+                    Section("Banka míst") {
+                        Toggle("Uložit také do banky míst", isOn: $saveToPlaceBank)
+                    }
+                }
+                if placeBankEnabled, stop?.sourceBankPlaceID != nil {
+                    Section("Banka míst") {
+                        Toggle("Promítnout změny také do banky", isOn: $updateSourceBankPlace)
+                    }
+                }
+
                 if stop == nil {
-                    Section("Prvni polozka checklistu") {
-                        TextField("Co chci videt", text: $firstChecklistItem)
+                    Section("První položka checklistu") {
+                        TextField("Co chci vidět", text: $firstChecklistItem)
                     }
                 }
                 }
             }
-            .navigationTitle(stop == nil ? "Nova zastavka" : "Upravit zastavku")
+            .navigationTitle(Text(LocalizedStringKey(stop == nil ? "Nová zastávka" : "Upravit zastávku")))
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Zrusit") { dismiss() }
+                    Button("Zrušit") { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Ulozit", action: save)
+                    Button("Uložit", action: save)
                         .disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
             }
@@ -295,7 +326,7 @@ struct StopFormView: View {
             .sheet(isPresented: $showingMapPointPicker) {
                 MapPointPickerView(
                     initialCoordinate: selectedCoordinate,
-                    title: title.isEmpty ? "Vybrat misto" : title
+                    title: title.isEmpty ? "Vybrat místo" : title
                 ) { coordinate in
                     applyManualCoordinate(coordinate)
                 }
@@ -346,9 +377,6 @@ struct StopFormView: View {
     }
 
     private func load() {
-        if placeBankEnabled, let city = trip.city {
-            PlaceBankImporter.importExistingStops(from: [city], modelContext: modelContext)
-        }
         guard let stop else {
             plannedArrival = trip.sortedStops.last?.plannedDeparture ?? (trip.hasFixedStartTime ? trip.startTime : .now)
             updateArrivalFromTravel()
@@ -370,11 +398,13 @@ struct StopFormView: View {
         note = stop.note
         mainReason = stop.mainReason
         isRequired = stop.isRequired
+        isTimeAnchor = stop.isTimeAnchor
         if let inboundSegment {
             transportMode = inboundSegment.transportMode
-            travelDurationMinutes = inboundSegment.plannedDurationMinutes
+            travelDurationMinutes = max(1, inboundSegment.plannedDurationMinutes)
             travelBufferMinutes = inboundSegment.bufferMinutes
         }
+        updateSourceBankPlace = stop.sourceBankPlaceID != nil
         updateMapPosition()
     }
 
@@ -399,7 +429,22 @@ struct StopFormView: View {
             stop.note = note
             stop.mainReason = mainReason
             stop.isRequired = isRequired
+            stop.isTimeAnchor = isTimeAnchor
             stop.updatedAt = .now
+
+            if updateSourceBankPlace,
+               let sourceID = stop.sourceBankPlaceID,
+               let bankPlace = trip.city?.sortedBankPlaces.first(where: { $0.id == sourceID }) {
+                bankPlace.title = stop.title
+                bankPlace.stopType = stop.stopType
+                bankPlace.mainReason = stop.mainReason
+                bankPlace.note = stop.note
+                bankPlace.recommendedVisitDurationMinutes = stop.plannedVisitDurationMinutes
+                bankPlace.address = stop.address
+                bankPlace.latitude = stop.latitude
+                bankPlace.longitude = stop.longitude
+                bankPlace.updatedAt = .now
+            }
 
             if let previousStop {
                 let segment = inboundSegment ?? TravelSegment(
@@ -408,7 +453,7 @@ struct StopFormView: View {
                     sortIndex: max(0, stop.sortIndex - 1)
                 )
                 segment.transportMode = transportMode
-                segment.plannedDurationMinutes = travelDurationMinutes
+                segment.plannedDurationMinutes = max(1, travelDurationMinutes)
                 segment.bufferMinutes = travelBufferMinutes
                 segment.plannedDeparture = previousStop.plannedDeparture
                 segment.fromStopID = previousStop.id
@@ -440,7 +485,9 @@ struct StopFormView: View {
                 note: note,
                 mainReason: mainReason,
                 isRequired: isRequired,
-                sortIndex: nextSortIndex
+                sortIndex: nextSortIndex,
+                sourceBankPlaceID: selectedBankPlace?.id,
+                isTimeAnchor: isTimeAnchor
             )
 
             let checklistTitle = firstChecklistItem.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -457,11 +504,37 @@ struct StopFormView: View {
 
             trip.addStop(newStop)
 
+            if saveToPlaceBank, let city = trip.city,
+               !city.sortedBankPlaces.contains(where: {
+                   PlaceBankDeduplicator.matches(
+                       title: newStop.title,
+                       address: newStop.address,
+                       latitude: newStop.latitude,
+                       longitude: newStop.longitude,
+                       place: $0
+                   )
+               }) {
+                let bankPlace = PlaceBankItem(
+                    title: newStop.title,
+                    stopType: newStop.stopType,
+                    highlights: firstChecklistItem,
+                    mainReason: newStop.mainReason,
+                    note: newStop.note,
+                    recommendedVisitDurationMinutes: newStop.plannedVisitDurationMinutes,
+                    address: newStop.address,
+                    latitude: newStop.latitude,
+                    longitude: newStop.longitude
+                )
+                bankPlace.city = city
+                city.addBankPlace(bankPlace)
+                modelContext.insert(bankPlace)
+            }
+
             if let previousStop = trip.sortedStops.dropLast().last {
                 trip.addTravelSegment(
                     TravelSegment(
                         transportMode: transportMode,
-                        plannedDurationMinutes: travelDurationMinutes,
+                        plannedDurationMinutes: max(1, travelDurationMinutes),
                         plannedDeparture: previousStop.plannedDeparture,
                         bufferMinutes: travelBufferMinutes,
                         fromStopID: previousStop.id,
@@ -524,7 +597,7 @@ struct StopFormView: View {
         latitudeText = String(coordinate.latitude)
         longitudeText = String(coordinate.longitude)
         if address.isEmpty {
-            address = "Rucne vybrany bod"
+            address = WaymintLocalization.text("Ručně vybraný bod")
         }
         updateMapPosition()
         estimateRouteIfPossible()
@@ -544,6 +617,8 @@ struct StopFormView: View {
         guard let previousStopCoordinate,
               let selectedCoordinate else { return }
 
+        let requestID = UUID()
+        routeEstimationID = requestID
         isEstimatingRoute = true
         routeMessage = nil
         Task {
@@ -553,13 +628,17 @@ struct StopFormView: View {
                     to: selectedCoordinate,
                     transportMode: transportMode
                 )
+                guard routeEstimationID == requestID else { return }
                 travelDurationMinutes = minutes
                 updateArrivalFromTravel()
-                routeMessage = "Apple Mapy odhaduji presun na \(minutes.minutesLabel)."
+                routeMessage = WaymintLocalization.format("Apple Mapy odhadují přesun na %@.", minutes.minutesLabel)
             } catch {
-                routeMessage = "Trasou podle Apple Map se ted nepodarilo spocitat. Nechavam rucni cas."
+                guard routeEstimationID == requestID else { return }
+                routeMessage = WaymintLocalization.text("Trasu se teď přes Apple Mapy nepodařilo spočítat. Ponechávám ruční čas.")
             }
-            isEstimatingRoute = false
+            if routeEstimationID == requestID {
+                isEstimatingRoute = false
+            }
         }
     }
 
@@ -710,7 +789,7 @@ private struct MapPointPickerView: View {
             }
             .safeAreaInset(edge: .bottom) {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Klepni do mapy a nastav presny bod.")
+                    Text("Klepni do mapy a nastav přesný bod.")
                         .font(.headline)
                     Text("\(selectedCoordinate.latitude.formatted(.number.precision(.fractionLength(5)))), \(selectedCoordinate.longitude.formatted(.number.precision(.fractionLength(5))))")
                         .font(.caption)
@@ -720,14 +799,14 @@ private struct MapPointPickerView: View {
                 .padding(16)
                 .background(.regularMaterial)
             }
-            .navigationTitle("Bod na mape")
+            .navigationTitle("Bod na mapě")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Zrusit") { dismiss() }
+                    Button("Zrušit") { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Pouzit") {
+                    Button("Použít") {
                         onSelect(selectedCoordinate)
                         dismiss()
                     }
@@ -742,7 +821,7 @@ struct PlaceSearchResult: Identifiable {
     let item: MKMapItem
 
     var title: String {
-        item.name ?? "Misto"
+        item.name ?? WaymintLocalization.text("Místo")
     }
 
     var subtitle: String {
@@ -797,10 +876,10 @@ final class PlaceSearchService: NSObject, ObservableObject {
             let response = try await MKLocalSearch(request: request).start()
             mapItems = response.mapItems.prefix(8).map(PlaceSearchResult.init(item:))
             results = []
-            errorMessage = mapItems.isEmpty ? "Nic jsem nenasel. Zkus presnejsi nazev nebo mesto." : nil
+            errorMessage = mapItems.isEmpty ? WaymintLocalization.text("Nic jsem nenašel. Zkus přesnější název nebo město.") : nil
         } catch {
             mapItems = []
-            errorMessage = "Vyhledavani se nepodarilo. Apple Mapy potrebuji pripojeni k internetu."
+            errorMessage = WaymintLocalization.text("Vyhledávání se nepodařilo. Apple Mapy potřebují připojení k internetu.")
         }
     }
 
@@ -813,7 +892,7 @@ final class PlaceSearchService: NSObject, ObservableObject {
             let response = try await MKLocalSearch(request: request).start()
             return response.mapItems.first
         } catch {
-            errorMessage = "Misto se nepodarilo nacist. Zkus upravit hledany text."
+            errorMessage = WaymintLocalization.text("Místo se nepodařilo načíst. Zkus upravit hledaný text.")
             return nil
         }
     }
@@ -828,7 +907,7 @@ extension PlaceSearchService: MKLocalSearchCompleterDelegate {
 
     nonisolated func completer(_ completer: MKLocalSearchCompleter, didFailWithError error: Error) {
         Task { @MainActor in
-            errorMessage = "Vyhledavani v Apple Mapach ted neni dostupne."
+            errorMessage = WaymintLocalization.text("Vyhledávání v Apple Mapách teď není dostupné.")
             results = []
         }
     }

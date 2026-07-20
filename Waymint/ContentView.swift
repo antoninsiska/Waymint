@@ -7,6 +7,8 @@ struct ContentView: View {
     @AppStorage("waymintHasSeenOnboarding") private var hasSeenOnboarding = false
     @State private var showsStarter = true
     @State private var deepLinkedActiveTrip: TripPlan?
+    @State private var recoverableTrip: TripPlan?
+    @State private var showingRecoveryPrompt = false
 
     var body: some View {
         ZStack {
@@ -30,6 +32,14 @@ struct ContentView: View {
             withAnimation(.easeInOut(duration: 0.42)) {
                 showsStarter = false
             }
+            if hasSeenOnboarding, deepLinkedActiveTrip == nil,
+               let trip = trips
+                .filter({ $0.status == .active || $0.status == .paused || $0.status == .stopped })
+                .sorted(by: { $0.updatedAt > $1.updatedAt })
+                .first {
+                recoverableTrip = trip
+                showingRecoveryPrompt = true
+            }
         }
         .fullScreenCover(
             isPresented: Binding(
@@ -47,6 +57,14 @@ struct ContentView: View {
             }
         }
         .onOpenURL(perform: handleDeepLink)
+        .alert("Pokračovat v cestě?", isPresented: $showingRecoveryPrompt, presenting: recoverableTrip) { trip in
+            Button("Pokračovat") {
+                deepLinkedActiveTrip = trip
+            }
+            Button("Teď ne", role: .cancel) {}
+        } message: { trip in
+            Text(WaymintLocalization.format("Waymint obnoví zastávku, čas, GPS a Live Activity pro cestu „%@“.", trip.title))
+        }
     }
 
     private func handleDeepLink(_ url: URL) {

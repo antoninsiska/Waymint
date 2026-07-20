@@ -34,14 +34,14 @@ struct CityDetailView: View {
             if trips.isEmpty {
                 EmptyStateView(
                     systemImage: "calendar.badge.plus",
-                    title: "Zatim zadny plan",
-                    message: "Vytvor denni trasu a zacni skladat zastavky podle casu."
+                    title: "Zatím žádný plán",
+                    message: "Vytvoř denní trasu a začni skládat zastávky podle času."
                 )
                 .listRowSeparator(.hidden)
             } else {
                 ForEach(trips) { trip in
                     NavigationLink {
-                        TripPlanDetailView(trip: trip)
+                        TripOverviewView(trip: trip)
                     } label: {
                         TripCardView(trip: trip)
                     }
@@ -75,30 +75,30 @@ struct CityDetailView: View {
             }
             ToolbarItem(placement: .topBarTrailing) {
                 HStack {
-                    if !trips.isEmpty {
-                        NavigationLink {
-                            CityTripsMapView(city: city)
-                        } label: {
-                            Label("Mapa města", systemImage: "map")
-                        }
-
-                        NavigationLink {
-                            CityWrappedView(city: city)
-                        } label: {
-                            Label("Wrapped", systemImage: "sparkles")
-                        }
-                    }
-
                     Button {
                         showingNewTrip = true
                     } label: {
-                        Label("Pridat plan", systemImage: "plus")
+                        Label("Přidat plán", systemImage: "plus")
                     }
 
-                    Button {
-                        importingTrip = true
+                    Menu {
+                        if !trips.isEmpty {
+                            NavigationLink {
+                                CityTripsMapView(city: city)
+                            } label: {
+                                Label("Mapa města", systemImage: "map")
+                            }
+                            NavigationLink {
+                                CityWrappedView(city: city)
+                            } label: {
+                                Label("Wrapped", systemImage: "sparkles")
+                            }
+                        }
+                        Button { importingTrip = true } label: {
+                            Label("Importovat .way", systemImage: "square.and.arrow.down")
+                        }
                     } label: {
-                        Label("Importovat .way", systemImage: "square.and.arrow.down")
+                        Label("Další akce", systemImage: "ellipsis.circle")
                     }
                 }
             }
@@ -216,7 +216,7 @@ private struct CityLandingSection: View {
             VStack(alignment: .leading, spacing: 14) {
                 HStack {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text(city.country.isEmpty ? "Cesta" : city.country.uppercased())
+                        Text(city.country.isEmpty ? WaymintLocalization.text("Cesta") : WaymintLocalization.countryName(city.country).uppercased())
                             .font(.caption2.weight(.bold))
                             .foregroundStyle(.white.opacity(0.68))
                         Text(city.landingTitle.isEmpty ? city.name : city.landingTitle)
@@ -229,7 +229,7 @@ private struct CityLandingSection: View {
                         .foregroundStyle(.white)
                 }
 
-                Text(city.landingSubtitle.isEmpty ? "Naplánuj dny, místa, přesuny a vstupenky pro \(city.name)." : city.landingSubtitle)
+                Text(city.landingSubtitle.isEmpty ? WaymintLocalization.format("Naplánuj dny, místa, přesuny a vstupenky pro %@.", city.name) : city.landingSubtitle)
                     .font(.subheadline)
                     .foregroundStyle(.white.opacity(0.78))
             }
@@ -290,25 +290,18 @@ private struct TripCardView: View {
     let trip: TripPlan
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(trip.title)
                         .font(.headline)
-                    Text("\(trip.date.waymintDate) · \(trip.scheduleLabel)")
+                    Text(trip.date.waymintDate)
                         .font(.subheadline)
                         .foregroundStyle(WaymintTheme.secondaryText)
                 }
                 Spacer()
                 StatusPill(trip.status.title, tint: WaymintTheme.primaryGreen)
             }
-
-            HStack(spacing: 12) {
-                Label("\(trip.stopCount) zastavek", systemImage: "mappin.and.ellipse")
-                Label(trip.hasFixedStartTime ? trip.approximateDurationMinutes.minutesLabel : trip.scheduleLabel, systemImage: "clock")
-            }
-            .font(.caption)
-            .foregroundStyle(WaymintTheme.secondaryText)
         }
         .padding(.vertical, 8)
     }

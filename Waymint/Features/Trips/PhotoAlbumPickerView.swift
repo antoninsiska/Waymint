@@ -15,8 +15,8 @@ struct PhotoAlbumPickerView: View {
                     if albums.isEmpty {
                         EmptyStateView(
                             systemImage: "photo.on.rectangle.angled",
-                            title: "Zadne album",
-                            message: "V Apple Photos jsem nenasel zadne uzivatelske album."
+                            title: "Žádné album",
+                            message: "V Apple Photos jsem nenašel žádné uživatelské album."
                         )
                     } else {
                         List(albums, id: \.localIdentifier) { album in
@@ -36,11 +36,11 @@ struct PhotoAlbumPickerView: View {
                     }
                 } else {
                     ContentUnavailableView {
-                        Label("Photos nejsou povolene", systemImage: "photo.badge.exclamationmark")
+                        Label("Fotky nejsou povolené", systemImage: "photo.badge.exclamationmark")
                     } description: {
-                        Text("Povol pristup k fotkam a vyber album pro tuhle cestu.")
+                        Text("Povol přístup k fotkám a vyber album pro tuto cestu.")
                     } actions: {
-                        Button("Povolit pristup") {
+                        Button("Povolit přístup") {
                             requestAccess()
                         }
                     }
@@ -50,7 +50,7 @@ struct PhotoAlbumPickerView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Zrusit") { dismiss() }
+                    Button("Zrušit") { dismiss() }
                 }
             }
             .onAppear {

@@ -11,6 +11,10 @@ final class TripPlan {
     var hasTemporaryActiveStartTime: Bool = false
     var actualStartedAt: Date?
     var actualEndedAt: Date?
+    var pausedAt: Date?
+    var accumulatedPauseSeconds: Double = 0
+    var offlinePreparedAt: Date?
+    var delayResponseStrategyRawValue: String = DelayResponseStrategy.shiftEverything.rawValue
     var statusRawValue: String = TripPlanStatus.draft.rawValue
     var sortIndex: Int = 0
     var landingTitle: String = ""
@@ -42,6 +46,10 @@ final class TripPlan {
         hasTemporaryActiveStartTime: Bool = false,
         actualStartedAt: Date? = nil,
         actualEndedAt: Date? = nil,
+        pausedAt: Date? = nil,
+        accumulatedPauseSeconds: Double = 0,
+        offlinePreparedAt: Date? = nil,
+        delayResponseStrategy: DelayResponseStrategy = .shiftEverything,
         status: TripPlanStatus = .draft,
         sortIndex: Int = 0,
         landingTitle: String = "",
@@ -64,6 +72,10 @@ final class TripPlan {
         self.hasTemporaryActiveStartTime = hasTemporaryActiveStartTime
         self.actualStartedAt = actualStartedAt
         self.actualEndedAt = actualEndedAt
+        self.pausedAt = pausedAt
+        self.accumulatedPauseSeconds = accumulatedPauseSeconds
+        self.offlinePreparedAt = offlinePreparedAt
+        self.delayResponseStrategyRawValue = delayResponseStrategy.rawValue
         self.statusRawValue = status.rawValue
         self.sortIndex = sortIndex
         self.landingTitle = landingTitle
@@ -84,6 +96,11 @@ final class TripPlan {
         set { statusRawValue = newValue.rawValue }
     }
 
+    var delayResponseStrategy: DelayResponseStrategy {
+        get { DelayResponseStrategy(rawValue: delayResponseStrategyRawValue) ?? .shiftEverything }
+        set { delayResponseStrategyRawValue = newValue.rawValue }
+    }
+
     var sortedStops: [TripStop] {
         (stops ?? []).sorted { lhs, rhs in
             if lhs.sortIndex == rhs.sortIndex {
@@ -97,6 +114,18 @@ final class TripPlan {
         (tickets ?? []).sorted { $0.createdAt < $1.createdAt }
     }
 
+    var allTickets: [TicketItem] {
+        var seen = Set<UUID>()
+        return (sortedTickets + sortedStops.flatMap(\.sortedTickets))
+            .filter(\.isUsableTicket)
+            .filter { seen.insert($0.id).inserted }
+            .sorted { lhs, rhs in
+                let lhsIndex = lhs.stop?.sortIndex ?? -1
+                let rhsIndex = rhs.stop?.sortIndex ?? -1
+                return lhsIndex == rhsIndex ? lhs.createdAt < rhs.createdAt : lhsIndex < rhsIndex
+            }
+    }
+
     var sortedTravelSegments: [TravelSegment] {
         (travelSegments ?? []).sorted { $0.sortIndex < $1.sortIndex }
     }
@@ -106,7 +135,11 @@ final class TripPlan {
     }
 
     var ticketCount: Int {
-        tickets?.count ?? 0
+        sortedTickets.filter(\.isUsableTicket).count
+    }
+
+    var totalTicketCount: Int {
+        allTickets.count
     }
 
     func addStop(_ stop: TripStop) {
@@ -154,16 +187,70 @@ final class TripPlan {
     var actualDurationMinutes: Int? {
         guard let actualStartedAt else { return nil }
         let end = actualEndedAt ?? Date()
-        return max(0, Int(end.timeIntervalSince(actualStartedAt) / 60))
+        let measured = max(0, Int(end.timeIntervalSince(actualStartedAt) / 60))
+        let expected = expectedContentDurationMinutes
+
+        // A trip can remain restored in the background after the user has
+        // effectively finished it. Do not present that idle time as a real
+        // multi-day trip duration. The underlying timestamps stay untouched
+        // and remain available in the diagnostic export.
+        let plausibleMaximum = max(12 * 60, expected + max(180, expected / 2))
+        if (status == .completed || status == .stopped), measured > plausibleMaximum, expected > 0 {
+            return expected
+        }
+        return measured
+    }
+
+    var hasSuspiciousRunningDuration: Bool {
+        guard status == .active || status == .paused,
+              let actualStartedAt else { return false }
+        let measured = Int(Date().timeIntervalSince(actualStartedAt) / 60)
+        return measured > max(18 * 60, expectedContentDurationMinutes * 3)
+    }
+
+    /// A conservative fallback used when old/restored activity timestamps or
+    /// travel segments contain an implausible multi-day interval.
+    var expectedContentDurationMinutes: Int {
+        let visitMinutes = sortedStops.reduce(0) { partial, stop in
+            partial + min(max(0, stop.plannedVisitDurationMinutes), 12 * 60)
+        }
+        let travelMinutes = sortedTravelSegments.reduce(0) { partial, segment in
+            let duration = segment.plannedDurationMinutes
+            return partial + ((1...(12 * 60)).contains(duration) ? duration : 0) + min(max(0, segment.bufferMinutes), 180)
+        }
+        return visitMinutes + travelMinutes
     }
 
     private var flexibleDurationLabel: String {
         guard let actualDurationMinutes else {
-            return "Bez pevného začátku"
+            return WaymintLocalization.text("Bez pevného začátku")
+        }
+        if hasSuspiciousRunningDuration {
+            return WaymintLocalization.text("Čas vyžaduje kontrolu")
         }
         if status == .completed {
-            return "Trvalo \(actualDurationMinutes.minutesLabel)"
+            return WaymintLocalization.format("Trvalo %@", actualDurationMinutes.minutesLabel)
         }
-        return "Běží \(actualDurationMinutes.minutesLabel)"
+        if status == .stopped {
+            return WaymintLocalization.format("Zastavena po %@", actualDurationMinutes.minutesLabel)
+        }
+        return WaymintLocalization.format("Běží %@", actualDurationMinutes.minutesLabel)
+    }
+}
+
+enum DelayResponseStrategy: String, CaseIterable, Identifiable, Codable {
+    case shiftEverything
+    case shortenOptionalStops
+    case preserveReservations
+    case suggestSkipping
+
+    var id: String { rawValue }
+    var title: String {
+        switch self {
+        case .shiftEverything: "Posunout celý plán"
+        case .shortenOptionalStops: "Zkrátit volitelné zastávky"
+        case .preserveReservations: "Zachovat pevné rezervace"
+        case .suggestSkipping: "Navrhovat přeskočení"
+        }
     }
 }

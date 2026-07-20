@@ -5,7 +5,6 @@ struct TimelineView: View {
     @Environment(\.modelContext) private var modelContext
     @Bindable var trip: TripPlan
 
-    @State private var editingStop: TripStop?
     private let scheduleCalculator = ScheduleCalculator()
 
     private var stops: [TripStop] {
@@ -44,14 +43,6 @@ struct TimelineView: View {
                                     showsClockTimes: trip.hasFixedStartTime
                                 )
                             }
-                            .swipeActions(edge: .leading) {
-                                Button {
-                                    editingStop = stop
-                                } label: {
-                                Label("Upravit", systemImage: "pencil")
-                                }
-                                .tint(WaymintTheme.primaryGreen)
-                            }
                         }
                         .listRowSeparator(.hidden)
                     }
@@ -67,9 +58,6 @@ struct TimelineView: View {
                     EditButton()
                 }
             }
-        }
-        .sheet(item: $editingStop) { stop in
-            StopFormView(trip: trip, stop: stop, nextSortIndex: trip.stopCount)
         }
     }
 
@@ -130,16 +118,19 @@ private struct SegmentRow: View {
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(WaymintTheme.primaryText)
                     Spacer()
-                    Text(totalTravelMinutes.minutesLabel)
+                    Text(travelDurationLabel)
                         .font(.subheadline.weight(.bold))
                         .foregroundStyle(WaymintTheme.darkGreen)
                 }
 
-                HStack(spacing: 10) {
-                    Label(segment?.transportMode.title ?? "Přesun", systemImage: segment?.transportMode.systemImage ?? "arrow.right")
-                    Text(showsClockTimes ? "\(from.plannedDeparture.waymintTime) → \(to.plannedArrival.waymintTime)" : "Po předchozí zastávce")
+                HStack(spacing: 8) {
+                    Label {
+                        Text(LocalizedStringKey(segment?.transportMode.title ?? "Přesun"))
+                    } icon: {
+                        Image(systemName: segment?.transportMode.systemImage ?? "arrow.right")
+                    }
                     if let buffer = segment?.bufferMinutes, buffer > 0 {
-                        Text("+ \(buffer.minutesLabel) rezerva")
+                        Text(WaymintLocalization.format("+ %@ rezerva", buffer.minutesLabel))
                     }
                 }
                 .font(.caption)
@@ -156,7 +147,17 @@ private struct SegmentRow: View {
         guard let segment else {
             return max(0, Int(to.plannedArrival.timeIntervalSince(from.plannedDeparture) / 60))
         }
-        return max(0, segment.plannedDurationMinutes + segment.bufferMinutes)
+        let duration = segment.plannedDurationMinutes
+        guard (1...(12 * 60)).contains(duration) else { return 0 }
+        return duration + min(max(0, segment.bufferMinutes), 180)
+    }
+
+    private var travelDurationLabel: String {
+        guard let segment else { return totalTravelMinutes.minutesLabel }
+        guard (1...(12 * 60)).contains(segment.plannedDurationMinutes) else {
+            return WaymintLocalization.text("Zkontrolovat")
+        }
+        return totalTravelMinutes.minutesLabel
     }
 }
 
@@ -201,31 +202,6 @@ private struct TimelineStopRow: View {
                     Spacer()
                 }
 
-                if !stop.mainReason.isEmpty {
-                    Text(stop.mainReason)
-                        .font(.subheadline)
-                        .foregroundStyle(WaymintTheme.secondaryText)
-                }
-
-                HStack(spacing: 16) {
-                    if isStart {
-                        Image(systemName: "location.fill")
-                            .accessibilityLabel("Začátek cesty")
-                    } else {
-                        Label("\(stop.plannedVisitDurationMinutes)", systemImage: "timer")
-                            .accessibilityLabel("Na místě \(stop.plannedVisitDurationMinutes) minut")
-                        Label("\(inboundTravelMinutes)", systemImage: "arrow.right")
-                            .accessibilityLabel("Dojezd \(inboundTravelMinutes) minut")
-                    }
-                    Image(systemName: stop.isRequired ? "exclamationmark.circle" : "circle")
-                        .accessibilityLabel(stop.isRequired ? "Povinná" : "Volitelná")
-                    if stop.ticketCount > 0 {
-                        Label("\(stop.ticketCount)", systemImage: "ticket")
-                    }
-                }
-                .font(.caption)
-                .foregroundStyle(WaymintTheme.secondaryText)
-                .lineLimit(1)
             }
             .padding(12)
             .background(WaymintTheme.surface, in: RoundedRectangle(cornerRadius: WaymintTheme.cornerRadius))
@@ -255,16 +231,11 @@ private struct TimelineStopRow: View {
         }
     }
 
-    private var inboundTravelMinutes: Int {
-        guard let inboundSegment else { return 0 }
-        return max(0, inboundSegment.plannedDurationMinutes + inboundSegment.bufferMinutes)
-    }
-
     private var primaryTimeLabel: String {
         if showsClockTimes {
             return isStart ? stop.plannedDeparture.waymintTime : stop.plannedArrival.waymintTime
         }
-        return isStart ? "Start" : "Bod \(index)"
+        return isStart ? WaymintLocalization.text("Start") : WaymintLocalization.format("Bod %d", index)
     }
 }
 

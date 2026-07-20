@@ -12,6 +12,11 @@ struct TripPlanDetailView: View {
     @State private var exportErrorMessage = ""
     @State private var showingExportError = false
     @State private var showingInstagramComposer = false
+    @State private var showingActiveTrip = false
+    @State private var showingReadiness = false
+    @State private var showingStartTimingDecision = false
+    @State private var isPreparingOffline = false
+    @State private var offlineMessage: String?
 
     private let exportService = WaymintExportService()
 
@@ -31,28 +36,33 @@ struct TripPlanDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItemGroup(placement: .topBarTrailing) {
-                NavigationLink {
-                    ActiveTripView(trip: trip)
+                Button {
+                    requestTripStart()
                 } label: {
                     Label("Spustit", systemImage: "play.fill")
                 }
 
-                Button {
-                    showingTripSettings = true
+                Menu {
+                    Button { showingTripSettings = true } label: {
+                        Label("Upravit cestu", systemImage: "slider.horizontal.3")
+                    }
+                    Button { shareTrip() } label: {
+                        Label("Exportovat cestu", systemImage: "square.and.arrow.up")
+                    }
+                    Button { showingInstagramComposer = true } label: {
+                        Label("Obrázek na Instagram", systemImage: "photo.on.rectangle.angled")
+                    }
+                    Button {
+                        prepareOffline()
+                    } label: {
+                        Label(isPreparingOffline ? "Připravuji offline…" : "Připravit offline", systemImage: "arrow.down.circle")
+                    }
+                    .disabled(isPreparingOffline)
+                    Button { showingReadiness = true } label: {
+                        Label(TripReadinessChecker.isReady(trip) ? "Cesta je připravená" : "Cesta vyžaduje kontrolu", systemImage: TripReadinessChecker.isReady(trip) ? "checkmark.shield.fill" : "exclamationmark.triangle.fill")
+                    }
                 } label: {
-                    Label("Upravit cestu", systemImage: "slider.horizontal.3")
-                }
-
-                Button {
-                    shareTrip()
-                } label: {
-                    Label("Sdílet cestu", systemImage: "square.and.arrow.up")
-                }
-
-                Button {
-                    showingInstagramComposer = true
-                } label: {
-                    Label("Obrázek na Instagram", systemImage: "photo.on.rectangle.angled")
+                    Label("Další akce", systemImage: "ellipsis.circle")
                 }
 
                 Button {
@@ -85,20 +95,47 @@ struct TripPlanDetailView: View {
         .sheet(isPresented: $showingInstagramComposer) {
             InstagramTripCardComposerView(trip: trip)
         }
+        .sheet(isPresented: $showingReadiness) {
+            TripReadinessView(trip: trip) {
+                showingReadiness = false
+                showingActiveTrip = true
+            }
+        }
+        .navigationDestination(isPresented: $showingActiveTrip) {
+            ActiveTripView(trip: trip)
+        }
+        .confirmationDialog("Plánovaný čas nesouhlasí", isPresented: $showingStartTimingDecision, titleVisibility: .visible) {
+            Button("Přesunout plán na teď") {
+                TripStartTimingService().movePlanToNow(trip)
+                continueTripStart()
+            }
+            Button("Spustit podle původního plánu") {
+                continueTripStart()
+            }
+            Button("Zpět do plánování") {
+                showingTripSettings = true
+            }
+            Button("Zrušit", role: .cancel) {}
+        } message: {
+            Text(startTimingWarning)
+        }
         .alert("Export se nepovedl", isPresented: $showingExportError) {
             Button("OK", role: .cancel) {}
         } message: {
             Text(exportErrorMessage)
         }
+        .alert("Offline příprava", isPresented: Binding(get: { offlineMessage != nil }, set: { if !$0 { offlineMessage = nil } })) {
+            Button("OK", role: .cancel) { offlineMessage = nil }
+        } message: { Text(offlineMessage ?? "") }
     }
 
     private var portraitContent: some View {
         VStack(spacing: 0) {
             TripHeaderView(trip: trip)
 
-            Picker("Rezim", selection: $selectedMode) {
+            Picker("Režim", selection: $selectedMode) {
                 ForEach(TripDetailMode.allCases) { mode in
-                    Label(mode.title, systemImage: mode.systemImage).tag(mode)
+                    Label { Text(LocalizedStringKey(mode.title)) } icon: { Image(systemName: mode.systemImage) }.tag(mode)
                 }
             }
             .pickerStyle(.segmented)
@@ -127,6 +164,78 @@ struct TripPlanDetailView: View {
         }
     }
 
+    private func requestTripStart() {
+        if TripStartTimingService().needsConfirmation(for: trip) {
+            showingStartTimingDecision = true
+        } else {
+            continueTripStart()
+        }
+    }
+
+    private func continueTripStart() {
+        if TripReadinessChecker.issues(for: trip).isEmpty {
+            showingActiveTrip = true
+        } else {
+            showingReadiness = true
+        }
+    }
+
+    private var startTimingWarning: String {
+        let planned = TripStartTimingService().plannedStart(for: trip)
+        return WaymintLocalization.format("Cesta je naplánovaná na %@ v %@, ale teď je %@ v %@. Jak ji chceš spustit?", trip.date.waymintDate, planned.waymintTime, Date().waymintDate, Date().waymintTime)
+    }
+
+    private func prepareOffline() {
+        isPreparingOffline = true
+        Task {
+            let result = await TripOfflinePreparationService.prepare(trip)
+            offlineMessage = "Uloženo tras: \(result.routeCount). Odhadovaných úseků: \(result.estimatedRouteCount). Chybějících souborů vstupenek: \(result.missingTicketFiles). Apple Mapy si spravují samotný mapový podklad systémově; Waymint uložil trasy a všechna vlastní data dostupná aplikaci."
+            isPreparingOffline = false
+        }
+    }
+
+}
+
+struct TripReadinessView: View {
+    @Environment(\.dismiss) private var dismiss
+    let trip: TripPlan
+    let startAnyway: () -> Void
+
+    private var issues: [TripReadinessIssue] { TripReadinessChecker.issues(for: trip) }
+    private var hasBlockingIssue: Bool { issues.contains { $0.severity == .blocking } }
+
+    var body: some View {
+        NavigationStack {
+            List {
+                if issues.isEmpty {
+                    ContentUnavailableView("Cesta je připravená", systemImage: "checkmark.shield.fill", description: Text(LocalizedStringKey("Souřadnice, přesuny, časy a soubory vstupenek jsou v pořádku.")))
+                } else {
+                    Section(hasBlockingIssue ? "Vyžaduje kontrolu" : "Doporučení") {
+                        ForEach(issues) { issue in
+                            Label {
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(issue.title).font(.headline)
+                                    Text(issue.detail).font(.caption).foregroundStyle(WaymintTheme.secondaryText)
+                                }
+                            } icon: {
+                                Image(systemName: issue.systemImage)
+                                    .foregroundStyle(issue.severity == .blocking ? WaymintTheme.warning : WaymintTheme.secondaryText)
+                            }
+                        }
+                    }
+                }
+                Section {
+                    Button {
+                        startAnyway()
+                    } label: {
+                        Label(hasBlockingIssue ? "Přesto spustit" : "Spustit cestu", systemImage: "play.fill")
+                    }
+                }
+            }
+            .navigationTitle("Kontrola před startem")
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Zavřít") { dismiss() } } }
+        }
+    }
 }
 
 private struct InstagramTripCardComposerView: View {
@@ -138,15 +247,31 @@ private struct InstagramTripCardComposerView: View {
     @State private var isLoading = false
     @State private var errorMessage: String?
     @State private var showingShareSheet = false
+    @State private var excludedStopIDs: Set<UUID> = []
     private let service = InstagramTripCardService()
 
     var body: some View {
         NavigationStack {
             VStack(spacing: 16) {
-                Picker("Vzhled", selection: $style) {
-                    ForEach(InstagramTripCardService.Style.allCases) { Text($0.title).tag($0) }
+                Picker("Styl obrázku", selection: $style) {
+                    ForEach(InstagramTripCardService.Style.allCases) { Text(LocalizedStringKey($0.title)).tag($0) }
                 }
                 .pickerStyle(.segmented)
+
+                DisclosureGroup("Místa v trase") {
+                    ScrollView {
+                        VStack(spacing: 8) {
+                            ForEach(trip.sortedStops.filter(\.coordinateIsValid)) { stop in
+                                Toggle(isOn: inclusionBinding(for: stop)) {
+                                    Label(stop.title, systemImage: stop.stopType.systemImage)
+                                        .lineLimit(1)
+                                }
+                                .disabled(!excludedStopIDs.contains(stop.id) && includedStopCount <= 2)
+                            }
+                        }
+                    }
+                    .frame(maxHeight: 150)
+                }
 
                 ZStack {
                     RoundedRectangle(cornerRadius: 22).fill(WaymintTheme.elevatedSurface)
@@ -177,7 +302,7 @@ private struct InstagramTripCardComposerView: View {
             .navigationTitle("Instagram obrázek")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Zavřít") { dismiss() } } }
-            .task(id: style) { await generatePreview() }
+            .task(id: generationKey) { await generatePreview() }
             .sheet(isPresented: $showingShareSheet) {
                 if let imageURL { ShareSheet(activityItems: [imageURL]) }
             }
@@ -190,13 +315,33 @@ private struct InstagramTripCardComposerView: View {
         imageURL = nil
         previewImage = nil
         do {
-            let url = try await service.create(for: trip, style: style)
+            let url = try await service.create(for: trip, style: style, excludedStopIDs: excludedStopIDs)
+            guard !Task.isCancelled else { return }
             imageURL = url
             previewImage = UIImage(contentsOfFile: url.path)
         } catch {
+            guard !Task.isCancelled else { return }
             errorMessage = error.localizedDescription
         }
         isLoading = false
+    }
+
+    private var includedStopCount: Int {
+        trip.sortedStops.filter { $0.coordinateIsValid && !excludedStopIDs.contains($0.id) }.count
+    }
+
+    private var generationKey: String {
+        style.rawValue + excludedStopIDs.map(\.uuidString).sorted().joined()
+    }
+
+    private func inclusionBinding(for stop: TripStop) -> Binding<Bool> {
+        Binding(
+            get: { !excludedStopIDs.contains(stop.id) },
+            set: { included in
+                if included { excludedStopIDs.remove(stop.id) }
+                else if includedStopCount > 2 { excludedStopIDs.insert(stop.id) }
+            }
+        )
     }
 }
 
@@ -226,7 +371,7 @@ private enum TripDetailMode: String, CaseIterable, Identifiable {
 
 private struct TripHeaderView: View {
     let trip: TripPlan
-    @State private var isDescriptionExpanded = true
+    @State private var isDescriptionExpanded = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -244,9 +389,11 @@ private struct TripHeaderView: View {
             }
 
             HStack(spacing: 12) {
-                Label("\(trip.stopCount) zastávek", systemImage: "mappin.and.ellipse")
-                Label(trip.hasFixedStartTime ? trip.approximateDurationMinutes.minutesLabel : trip.scheduleLabel, systemImage: "clock")
-                Label("\(trip.ticketCount) vstupenek", systemImage: "ticket.fill")
+                Label(WaymintLocalization.format("%d zastávek", trip.stopCount), systemImage: "mappin.and.ellipse")
+                Label((trip.hasFixedStartTime ? trip.approximateDurationMinutes : trip.expectedContentDurationMinutes).minutesLabel, systemImage: "clock")
+                if trip.totalTicketCount > 0 {
+                    Label(WaymintLocalization.format("%d vstupenek", trip.totalTicketCount), systemImage: "ticket.fill")
+                }
             }
             .font(.caption)
             .foregroundStyle(WaymintTheme.secondaryText)

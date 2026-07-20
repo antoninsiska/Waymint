@@ -123,10 +123,13 @@
     setPrimaryAction("new-stop", "＋ Přidat zastávku", {city:cityId, trip:tripId});
     const stops = [...(trip.stops || [])].sort((a,b)=>a.sortIndex-b.sortIndex);
     $("#view").innerHTML = `<div class="breadcrumb"><button data-action="home">Waymint</button><span>/</span><button data-href="#/city/${city.id}">${esc(city.name)}</button><span>/</span><span>${esc(trip.title)}</span></div>
-      <section class="detail-head"><div><span class="eyebrow">${fmtDate(trip.date)} · ${esc(city.name)}</span><h1>${esc(trip.title)}</h1><p>${timeRange(trip)} · ${stops.length} zastávek · ${minutes(tripDuration(trip))}</p></div><div class="actions"><button class="button primary" data-action="new-stop" data-city="${city.id}" data-trip="${trip.id}">＋ Zastávka</button><button class="button" data-action="export-trip" data-city="${city.id}" data-trip="${trip.id}">⇧ Export .way</button><button class="button danger" data-action="delete-trip" data-city="${city.id}" data-trip="${trip.id}">Smazat</button></div></section>
+      <section class="detail-head"><div><span class="eyebrow">${fmtDate(trip.date)} · ${esc(city.name)}</span><h1>${esc(trip.title)}</h1><p>${timeRange(trip)} · ${stops.length} zastávek · ${minutes(tripDuration(trip))}</p></div><div class="actions"><button class="button primary" data-action="new-stop" data-city="${city.id}" data-trip="${trip.id}">＋ Zastávka</button><button class="button" data-action="edit-trip" data-city="${city.id}" data-trip="${trip.id}">Upravit plán</button><button class="button" data-action="export-trip" data-city="${city.id}" data-trip="${trip.id}">⇧ Export .way</button><button class="button danger" data-action="delete-trip" data-city="${city.id}" data-trip="${trip.id}">Smazat</button></div></section>
+      ${readinessCard(trip)}
       ${trip.landingTitle || trip.landingSubtitle ? `<div class="stat" style="margin-top:24px"><strong style="font-size:18px">${esc(trip.landingTitle)}</strong><span>${esc(trip.landingSubtitle)}</span></div>` : ""}
+      ${webRouteMap(trip)}
       <div class="section-head"><div><h2>Časová osa</h2><p>${trip.hasFixedStartTime === false ? "Trasa bez pevného začátku" : "Přehled dne krok za krokem"}</p></div></div>
-      ${stops.length ? `<section class="timeline">${stops.map((s,i)=>stopCard(s,i,city,trip)).join("")}</section>` : emptyState("Časová osa je prázdná", "Přidej první zastávku a nastav čas příchodu a odchodu.", `<button class="button primary" data-action="new-stop" data-city="${city.id}" data-trip="${trip.id}">Přidat zastávku</button>`)}`;
+      ${stops.length ? `<section class="timeline">${stops.map((s,i)=>stopCard(s,i,city,trip)).join("")}</section>` : emptyState("Časová osa je prázdná", "Přidej první zastávku a nastav čas příchodu a odchodu.", `<button class="button primary" data-action="new-stop" data-city="${city.id}" data-trip="${trip.id}">Přidat zastávku</button>`)}
+      ${ticketsSection(city, trip)}`;
   }
 
   function stopCard(stop, index, city, trip) {
@@ -136,7 +139,38 @@
     const checklist = stop.checklist || [];
     const doneCount = checklist.filter(item => item.isDone).length;
     const details = stop.note || checklist.length ? `<div class="stop-details">${stop.note ? `<span>📝 ${esc(stop.note)}</span>` : ""}${checklist.length ? `<span>☑ ${doneCount}/${checklist.length} hotovo</span>` : ""}</div>` : "";
-    return `${travel}<article class="stop"><div class="rail"><div class="dot">${index ? index+1 : "⚑"}</div><div class="line"></div></div><div class="stop-card"><div class="stop-top"><div><span class="stop-time">${trip.hasFixedStartTime === false ? (index ? `Bod ${index+1}` : "Start") : `${fmtTime(stop.plannedArrival)}–${fmtTime(stop.plannedDeparture)}`}</span><h3>${esc(stop.title)}</h3><p>${esc(stop.address || stop.mainReason || typeTitle(stop.type))}</p></div><div class="stop-actions"><span class="pill">${stop.isRequired === false ? "Volitelná" : index ? stopStatusTitle(stop.status) : "Start"}</span><button class="button" type="button" data-action="edit-stop" data-city="${city.id}" data-trip="${trip.id}" data-stop="${stop.id}">Upravit</button></div></div>${details}</div></article>`;
+    return `${travel}<article class="stop"><div class="rail"><div class="dot">${index ? index+1 : "⚑"}</div><div class="line"></div></div><div class="stop-card"><div class="stop-top"><div><span class="stop-time">${trip.hasFixedStartTime === false ? (index ? `Bod ${index+1}` : "Start") : `${fmtTime(stop.plannedArrival)}–${fmtTime(stop.plannedDeparture)}`}</span><h3>${esc(stop.title)}</h3><p>${esc(stop.address || stop.mainReason || typeTitle(stop.type))}</p></div><div class="stop-actions"><span class="pill">${stop.isRequired === false ? "Volitelná" : index ? stopStatusTitle(stop.status) : "Start"}</span><button class="button" type="button" data-action="edit-stop" data-city="${city.id}" data-trip="${trip.id}" data-stop="${stop.id}">Upravit</button><button class="button danger" type="button" data-action="delete-stop" data-city="${city.id}" data-trip="${trip.id}" data-stop="${stop.id}">Smazat</button></div></div>${details}</div></article>`;
+  }
+
+  function tripIssues(trip) {
+    const stops = [...(trip.stops || [])].sort((a,b)=>a.sortIndex-b.sortIndex), issues=[];
+    if (!stops.length) issues.push("Cesta nemá žádné zastávky.");
+    stops.forEach(stop => { if (stop.latitude == null || stop.longitude == null) issues.push(`${stop.title}: chybí poloha.`); });
+    stops.slice(1).forEach(stop => {
+      const segment=(trip.travelSegments||[]).find(item=>item.toStopID===stop.id);
+      if (!segment || Number(segment.plannedDurationMinutes)<=0) issues.push(`${stop.title}: chybí platný přesun.`);
+    });
+    return issues;
+  }
+
+  function readinessCard(trip) {
+    const issues=tripIssues(trip);
+    return `<section class="readiness ${issues.length ? "needs-work" : "ready"}"><div class="readiness-icon">${issues.length ? "!" : "✓"}</div><div><span class="eyebrow">Kontrola před cestou</span><h2>${issues.length ? `Zkontrolovat ${issues.length} ${issues.length===1?"problém":"problémy"}` : "Cesta je připravená"}</h2><p>${issues.length ? esc(issues.slice(0,3).join(" · ")) : "Místa mají polohu a jednotlivé přesuny na sebe navazují."}</p></div></section>`;
+  }
+
+  function webRouteMap(trip) {
+    const stops=[...(trip.stops||[])].sort((a,b)=>a.sortIndex-b.sortIndex).filter(stop=>stop.latitude!=null&&stop.longitude!=null);
+    if (!stops.length) return "";
+    const lats=stops.map(s=>Number(s.latitude)), lons=stops.map(s=>Number(s.longitude));
+    const minLat=Math.min(...lats),maxLat=Math.max(...lats),minLon=Math.min(...lons),maxLon=Math.max(...lons);
+    const point=stop=>({x:30+((Number(stop.longitude)-minLon)/(maxLon-minLon||1))*540,y:250-((Number(stop.latitude)-minLat)/(maxLat-minLat||1))*210});
+    const points=stops.map(point);
+    return `<section class="web-route"><div class="section-head compact"><div><h2>Plán na mapě</h2><p>${stops.length} míst s uloženou polohou</p></div></div><svg viewBox="0 0 600 280" role="img" aria-label="Schematický náhled trasy">${points.length>1?`<polyline points="${points.map(p=>`${p.x},${p.y}`).join(" ")}"/>`:""}${points.map((p,i)=>`<g transform="translate(${p.x} ${p.y})"><circle r="15"/><text y="4">${i+1}</text></g>`).join("")}</svg><div class="route-place-list">${stops.map((stop,i)=>`<span><b>${i+1}</b>${esc(stop.title)}</span>`).join("")}</div></section>`;
+  }
+
+  function ticketsSection(city, trip) {
+    const tickets=(trip.tickets||[]).filter(ticket=>ticket.code||ticket.externalURLString);
+    return `<section class="web-tickets"><div class="section-head"><div><h2>Vstupenky a rezervace</h2><p>Kódy a odkazy uložené u této cesty.</p></div><button class="button" data-action="new-ticket" data-city="${city.id}" data-trip="${trip.id}">＋ Přidat</button></div>${tickets.length?`<div class="ticket-grid">${tickets.map(ticket=>{const type=ticket.ticketType||ticket.ticketTypeRawValue;return `<article><span class="eyebrow">${type==="link"?"Odkaz":"Kód"}</span><h3>${esc(ticket.title)}</h3><p>${esc(ticket.note||ticket.code||ticket.externalURLString||"")}</p><div class="actions">${type==="link"?`<a class="button" href="${esc(ticket.externalURLString||ticket.code)}" target="_blank" rel="noopener">Otevřít</a>`:`<button class="button" data-action="copy-ticket" data-code="${esc(ticket.code||"")}">Kopírovat kód</button>`}<button class="button danger" data-action="delete-ticket" data-city="${city.id}" data-trip="${trip.id}" data-ticket="${ticket.id}">Smazat</button></div></article>`}).join("")}</div>`:`<p class="muted-empty">Zatím tu nejsou žádné kódy ani odkazy.</p>`}</section>`;
   }
 
   function emptyState(title, text, action = `<button class="button primary" data-action="new-city">Přidat město</button>`) {
@@ -159,12 +193,25 @@
       save(); toast(city ? "Město bylo upraveno." : "Město bylo vytvořeno.");
     });
   }
-  function tripModal(city) {
-    const today = new Date().toISOString().slice(0,10);
-    openModal("Nová cesta", `<div class="form-grid">${field("title","Název cesty","","text",true,"required")}${field("date","Datum",today,"date",false,"required")}${field("start","Začátek","09:00","time",false,"required")}${field("landingTitle","Nadpis","","text",true)}${field("landingSubtitle","Krátký popis","","text",true)}</div>`, data => {
+  function tripModal(city, trip = null) {
+    const dateValue = trip ? new Date(trip.date).toISOString().slice(0,10) : new Date().toISOString().slice(0,10);
+    const startValue = trip ? inputTime(trip.startTime || trip.date) : "09:00";
+    openModal(trip ? "Upravit cestu" : "Nová cesta", `<div class="form-grid">${field("title","Název cesty",trip?.title||"","text",true,"required")}${field("date","Datum",dateValue,"date",false,"required")}${field("start","Začátek",startValue,"time",false,"required")}<label class="check-field full"><input name="hasFixedStartTime" type="checkbox" ${trip?.hasFixedStartTime===false?"":"checked"}><span><strong>Pevný čas začátku</strong><small>Vypni, pokud cestu spustíš kdykoliv podle situace.</small></span></label>${field("landingTitle","Nadpis",trip?.landingTitle||"","text",true)}${field("landingSubtitle","Krátký popis",trip?.landingSubtitle||"","text",true)}<div class="field full"><label for="trip-note">Poznámky k cestě</label><textarea id="trip-note" name="note" rows="4">${esc(trip?.note||"")}</textarea></div></div>`, data => {
       const startTime = new Date(`${data.get("date")}T${data.get("start")}:00`).toISOString();
-      city.trips ||= []; city.trips.push({id:uid(),cityName:city.name,country:city.country,title:data.get("title"),date:new Date(`${data.get("date")}T12:00:00`).toISOString(),startTime,hasFixedStartTime:true,actualStartedAt:null,actualEndedAt:null,status:"draft",sortIndex:city.trips.length,timeRangeLabel:data.get("start"),approximateDurationMinutes:0,landingTitle:data.get("landingTitle"),landingSubtitle:data.get("landingSubtitle"),photoAlbumTitle:null,note:"",stops:[],travelSegments:[],tickets:[]});
-      city.updatedAt=now(); save(); toast("Cesta byla přidána.");
+      if (trip) {
+        const oldStart=new Date(trip.startTime||trip.date), shift=new Date(startTime)-oldStart;
+        if (Number.isFinite(shift) && shift!==0) {
+          (trip.stops||[]).forEach(stop=>{
+            stop.plannedArrival=new Date(new Date(stop.plannedArrival).getTime()+shift).toISOString();
+            stop.plannedDeparture=new Date(new Date(stop.plannedDeparture).getTime()+shift).toISOString();
+          });
+          (trip.travelSegments||[]).forEach(segment=>{ if(segment.plannedDeparture) segment.plannedDeparture=new Date(new Date(segment.plannedDeparture).getTime()+shift).toISOString(); });
+        }
+      }
+      const values={cityName:city.name,country:city.country,title:data.get("title"),date:new Date(`${data.get("date")}T12:00:00`).toISOString(),startTime,hasFixedStartTime:data.get("hasFixedStartTime")==="on",landingTitle:data.get("landingTitle"),landingSubtitle:data.get("landingSubtitle"),note:data.get("note"),updatedAt:now()};
+      if (trip) Object.assign(trip,values);
+      else { city.trips ||= []; city.trips.push({id:uid(),...values,actualStartedAt:null,actualEndedAt:null,status:"draft",sortIndex:city.trips.length,timeRangeLabel:data.get("start"),approximateDurationMinutes:0,photoAlbumTitle:null,stops:[],travelSegments:[],tickets:[]}); }
+      city.updatedAt=now(); save(); toast(trip ? "Cesta byla upravena." : "Cesta byla přidána.");
     });
   }
   function stopModal(city, trip, existingStop = null) {
@@ -180,10 +227,10 @@
     const options = (items, selected) => items.map(([value,label]) => `<option value="${value}" ${value === selected ? "selected" : ""}>${label}</option>`).join("");
     addressResults = [];
     const checklistMarkup = (existingStop?.checklist || []).sort((a,b)=>(a.sortIndex||0)-(b.sortIndex||0)).map(checklistRow).join("");
-    openModal(isEditing ? "Upravit zastávku" : "Nová zastávka", `<div class="form-grid">${field("title","Název místa",existingStop?.title||"","text",true,"required")}${field("arrival","Příchod",existingStop ? inputTime(existingStop.plannedArrival) : "10:00","time",false,"required")}${field("departure","Odchod",existingStop ? inputTime(existingStop.plannedDeparture) : "11:00","time",false,"required")}<div class="field full"><label for="address-query">Vyhledat adresu nebo místo</label><div class="address-search"><input id="address-query" type="search" autocomplete="off" value="${esc(address)}" data-selected-address="${esc(address)}" placeholder="Začni psát, např. Pražský hrad"><span class="search-spinner" aria-hidden="true"></span></div><input id="address" name="address" type="hidden" value="${esc(address)}"><input id="latitude" name="latitude" type="hidden" value="${existingStop?.latitude ?? ""}"><input id="longitude" name="longitude" type="hidden" value="${existingStop?.longitude ?? ""}"><div id="address-results" class="address-results"></div><div id="address-status" class="search-status">${address ? `Aktuální adresa: ${esc(address)}` : "Návrhy se zobrazí po zadání alespoň tří znaků."}</div><div id="map-preview" class="map-preview" hidden></div><div class="address-credit">Vyhledávání Photon · data © OpenStreetMap contributors</div></div>${field("mainReason","Hlavní důvod návštěvy",existingStop?.mainReason||"","text",true)}<div class="field"><label for="type">Typ</label><select name="type" id="type">${options(typeOptions, existingStop?.type || "sight")}</select></div><div class="field"><label for="transportMode">Přesun z předchozího bodu</label><select name="transportMode" id="transportMode" ${previous ? "" : "disabled"}>${options(transportOptions, incomingSegment?.transportMode || "walking")}</select><span class="search-status">${previous ? "Délka přesunu se spočítá automaticky." : "První zastávka nemá předchozí přesun."}</span></div><div class="field full"><label for="note">Poznámky</label><textarea id="note" name="note" rows="4" placeholder="Důležité informace, tipy nebo rezervace…">${esc(existingStop?.note||"")}</textarea></div><div class="field full"><div class="checklist-head"><label>Checklist</label><button class="button" type="button" data-action="add-checklist">＋ Přidat položku</button></div><div id="checklist-items" class="checklist-items">${checklistMarkup}</div><span class="search-status">Položky se uloží ve stejném pořadí.</span></div></div>`, async data => {
+    openModal(isEditing ? "Upravit zastávku" : "Nová zastávka", `<div class="form-grid">${field("title","Název místa",existingStop?.title||"","text",true,"required")}${field("arrival","Příchod",existingStop ? inputTime(existingStop.plannedArrival) : "10:00","time",false,"required")}${field("departure","Odchod",existingStop ? inputTime(existingStop.plannedDeparture) : "11:00","time",false,"required")}<label class="check-field full"><input name="isRequired" type="checkbox" ${existingStop?.isRequired===false?"":"checked"}><span><strong>Povinná zastávka</strong><small>Volitelná místa lze při zpoždění snadněji vynechat.</small></span></label><div class="field full"><label for="address-query">Vyhledat adresu nebo místo</label><div class="address-search"><input id="address-query" type="search" autocomplete="off" value="${esc(address)}" data-selected-address="${esc(address)}" placeholder="Začni psát, např. Pražský hrad"><span class="search-spinner" aria-hidden="true"></span></div><input id="address" name="address" type="hidden" value="${esc(address)}"><input id="latitude" name="latitude" type="hidden" value="${existingStop?.latitude ?? ""}"><input id="longitude" name="longitude" type="hidden" value="${existingStop?.longitude ?? ""}"><div id="address-results" class="address-results"></div><div id="address-status" class="search-status">${address ? `Aktuální adresa: ${esc(address)}` : "Návrhy se zobrazí po zadání alespoň tří znaků."}</div><div id="map-preview" class="map-preview" hidden></div><div class="address-credit">Vyhledávání Photon · data © OpenStreetMap contributors</div></div>${field("mainReason","Hlavní důvod návštěvy",existingStop?.mainReason||"","text",true)}<div class="field"><label for="type">Typ</label><select name="type" id="type">${options(typeOptions, existingStop?.type || "sight")}</select></div><div class="field"><label for="transportMode">Přesun z předchozího bodu</label><select name="transportMode" id="transportMode" ${previous ? "" : "disabled"}>${options(transportOptions, incomingSegment?.transportMode || "walking")}</select><span class="search-status">${previous ? "Délka přesunu se spočítá automaticky." : "První zastávka nemá předchozí přesun."}</span></div>${previous?field("bufferMinutes","Časová rezerva (min)",incomingSegment?.bufferMinutes||0,"number"):""}<div class="field full"><label for="note">Poznámky</label><textarea id="note" name="note" rows="4" placeholder="Důležité informace, tipy nebo rezervace…">${esc(existingStop?.note||"")}</textarea></div><div class="field full"><div class="checklist-head"><label>Checklist</label><button class="button" type="button" data-action="add-checklist">＋ Přidat položku</button></div><div id="checklist-items" class="checklist-items">${checklistMarkup}</div><span class="search-status">Položky se uloží ve stejném pořadí.</span></div></div>`, async data => {
       const arrival = new Date(`${date}T${data.get("arrival")}:00`).toISOString(), departure = new Date(`${date}T${data.get("departure")}:00`).toISOString();
       const checklist = $$(".checklist-row").map((row,sortIndex) => ({id:row.dataset.id||uid(),title:$(".checklist-title",row).value.trim(),isDone:$(".checklist-done",row).checked,sortIndex})).filter(item=>item.title);
-      const values = {title:data.get("title"),type:data.get("type"),plannedArrival:arrival,plannedDeparture:departure,plannedVisitDurationMinutes:Math.max(0,Math.round((new Date(departure)-new Date(arrival))/60000)),address:data.get("address"),latitude:data.get("latitude") ? Number(data.get("latitude")) : null,longitude:data.get("longitude") ? Number(data.get("longitude")) : null,mainReason:data.get("mainReason"),note:data.get("note"),checklist};
+      const values = {title:data.get("title"),type:data.get("type"),plannedArrival:arrival,plannedDeparture:departure,plannedVisitDurationMinutes:Math.max(0,Math.round((new Date(departure)-new Date(arrival))/60000)),address:data.get("address"),latitude:data.get("latitude") ? Number(data.get("latitude")) : null,longitude:data.get("longitude") ? Number(data.get("longitude")) : null,mainReason:data.get("mainReason"),note:data.get("note"),isRequired:data.get("isRequired")==="on",checklist};
       const stop = existingStop || {id:uid(),status:"planned",note:"",isRequired:true,sortIndex:trip.stops?.length||0,checklist:[],tickets:[]};
       Object.assign(stop, values);
       if (!isEditing) { trip.stops ||= []; trip.stops.push(stop); }
@@ -192,7 +239,7 @@
         const route = await calculateTransfer(previous, stop, transportMode);
         trip.travelSegments ||= [];
         const segment = incomingSegment || {id:uid(),bufferMinutes:0,fromStopID:previous.id,toStopID:stop.id,sortIndex:trip.travelSegments.length};
-        Object.assign(segment,{transportMode,plannedDurationMinutes:route.minutes,plannedDistanceMeters:route.distance,plannedDeparture:previous.plannedDeparture,note:route.estimated ? "Orientační odhad" : "Automaticky spočítáno podle mapy"});
+        Object.assign(segment,{transportMode,bufferMinutes:Math.max(0,Number(data.get("bufferMinutes")||0)),plannedDurationMinutes:route.minutes,plannedDistanceMeters:route.distance,plannedDeparture:previous.plannedDeparture,note:route.estimated ? "Orientační odhad" : "Automaticky spočítáno podle mapy"});
         if (!incomingSegment) trip.travelSegments.push(segment);
       }
       const next = sortedStops[stopIndex+1];
@@ -202,6 +249,15 @@
         Object.assign(outgoingSegment,{plannedDurationMinutes:route.minutes,plannedDistanceMeters:route.distance,plannedDeparture:stop.plannedDeparture,note:route.estimated ? "Orientační odhad" : "Automaticky spočítáno podle mapy"});
       }
       city.updatedAt = now(); save(); toast(isEditing ? "Zastávka byla upravena." : "Zastávka byla přidána.");
+    });
+  }
+
+  function ticketModal(city, trip) {
+    openModal("Nová vstupenka nebo rezervace", `<div class="form-grid">${field("title","Název","","text",true,"required")}<div class="field"><label for="ticketType">Typ</label><select id="ticketType" name="ticketType"><option value="textCode">Textový kód</option><option value="link">Odkaz</option></select></div>${field("value","Kód nebo URL","","text",true,"required")}<div class="field full"><label for="ticket-note">Poznámka</label><textarea id="ticket-note" name="note" rows="3" placeholder="Čas rezervace, držitel nebo další informace…"></textarea></div></div>`, data => {
+      const type=data.get("ticketType"),value=data.get("value").trim();
+      trip.tickets ||= [];
+      trip.tickets.push({id:uid(),title:data.get("title"),ticketTypeRawValue:type,ticketType:type,code:type==="textCode"?value:null,externalURLString:type==="link"?value:null,localFilePath:null,note:data.get("note"),createdAt:now()});
+      city.updatedAt=now(); save(); toast("Vstupenka byla přidána.");
     });
   }
 
@@ -321,8 +377,17 @@
     if(action==="new-city") cityModal();
     if(action==="edit-city") cityModal(city);
     if(action==="new-trip") tripModal(city);
+    if(action==="edit-trip") tripModal(city,trip);
     if(action==="new-stop") stopModal(city,trip);
     if(action==="edit-stop") stopModal(city,trip,stop);
+    if(action==="delete-stop" && confirm(`Opravdu smazat zastávku ${stop.title}?`)){
+      trip.stops=(trip.stops||[]).filter(item=>item.id!==stop.id).map((item,index)=>({...item,sortIndex:index}));
+      trip.travelSegments=(trip.travelSegments||[]).filter(item=>item.fromStopID!==stop.id&&item.toStopID!==stop.id);
+      city.updatedAt=now(); save(); toast("Zastávka byla smazána.");
+    }
+    if(action==="new-ticket") ticketModal(city,trip);
+    if(action==="delete-ticket") { trip.tickets=(trip.tickets||[]).filter(item=>item.id!==target.dataset.ticket); city.updatedAt=now(); save(); toast("Vstupenka byla smazána."); }
+    if(action==="copy-ticket") navigator.clipboard?.writeText(target.dataset.code||"").then(()=>toast("Kód byl zkopírován."));
     if(action==="add-checklist") { $("#checklist-items").insertAdjacentHTML("beforeend", checklistRow()); $("#checklist-items .checklist-row:last-child .checklist-title")?.focus(); }
     if(action==="remove-checklist") target.closest(".checklist-row")?.remove();
     if(action==="choose-address") chooseAddress(Number(target.dataset.index));

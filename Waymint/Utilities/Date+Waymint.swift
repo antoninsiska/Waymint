@@ -2,11 +2,11 @@ import Foundation
 
 extension Date {
     var waymintTime: String {
-        formatted(date: .omitted, time: .shortened)
+        formatted(.dateTime.hour().minute().locale(WaymintLocalization.currentLocale))
     }
 
     var waymintDate: String {
-        formatted(date: .abbreviated, time: .omitted)
+        formatted(.dateTime.day().month(.abbreviated).year().locale(WaymintLocalization.currentLocale))
     }
 }
 
@@ -18,4 +18,3 @@ extension Int {
         return "\(self) min"
     }
 }
-

@@ -1,7 +1,9 @@
+import CoreLocation
 import SwiftData
 import SwiftUI
 import UIKit
 import UniformTypeIdentifiers
+import UserNotifications
 
 struct AppSettingsView: View {
     @Environment(\.modelContext) private var modelContext
@@ -14,18 +16,27 @@ struct AppSettingsView: View {
     @AppStorage("activeTripShowNextStop") private var showNextStop = false
     @AppStorage("activeTripShowDepartureTime") private var showDepartureTime = true
     @AppStorage("activeTripShowDelay") private var showDelay = true
+    @AppStorage("waymintLiveActivityPreset") private var liveActivityPreset = "departure"
     @AppStorage("waymintPlaceBankEnabled") private var placeBankEnabled = false
     @AppStorage("waymintGPSArrivalRadius") private var gpsArrivalRadius = 85
     @AppStorage("waymintGPSDepartureRadius") private var gpsDepartureRadius = 140
     @AppStorage("waymintGPSDepartureConfirmationSeconds") private var gpsDepartureConfirmationSeconds = 20
+    @AppStorage("waymintAppLanguage") private var appLanguageRaw = AppLanguage.system.rawValue
+    @AppStorage("waymintEmergencyPowerMode") private var emergencyPowerMode = true
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.scenePhase) private var scenePhase
     @State private var showingICloudConsent = false
     @State private var exportedLibraryFile: ExportedWayFile?
+    @State private var exportedDiagnosticsFile: ExportedWayFile?
     @State private var importingLibrary = false
     @State private var showingTextImport = false
     @State private var syncErrorMessage = ""
     @State private var showingSyncError = false
     @State private var showingImportDone = false
+    @State private var showingDataHealth = false
+    @State private var locationAuthorizationStatus = CLLocationManager().authorizationStatus
+    @State private var notificationAuthorizationStatus = UNAuthorizationStatus.notDetermined
+    @State private var notificationMessage: String?
     private let exportService = WaymintExportService()
 
     var body: some View {
@@ -36,6 +47,14 @@ struct AppSettingsView: View {
                     Text("Přidá katalog míst rozdělený podle měst. Při tvorbě zastávky pak můžeš převzít uložené údaje a řešit hlavně přesun.")
                         .font(.caption)
                         .foregroundStyle(WaymintTheme.secondaryText)
+                }
+
+                Section("Jazyk") {
+                    Picker("Jazyk aplikace", selection: $appLanguageRaw) {
+                        ForEach(AppLanguage.allCases) { language in
+                            Text(LocalizedStringKey(language.title)).tag(language.rawValue)
+                        }
+                    }
                 }
 
                 Section("Ruční synchronizace") {
@@ -68,9 +87,13 @@ struct AppSettingsView: View {
                         .disabled(!ICloudSyncSettings.isAvailableInCurrentBuild)
 
                     VStack(alignment: .leading, spacing: 6) {
-                        Label(iCloudStatusTitle, systemImage: iCloudStatusIcon)
+                        Label {
+                            Text(LocalizedStringKey(iCloudStatusTitle))
+                        } icon: {
+                            Image(systemName: iCloudStatusIcon)
+                        }
                             .font(.subheadline.weight(.semibold))
-                        Text(iCloudStatusMessage)
+                        Text(LocalizedStringKey(iCloudStatusMessage))
                             .font(.caption)
                             .foregroundStyle(WaymintTheme.secondaryText)
                     }
@@ -79,25 +102,74 @@ struct AppSettingsView: View {
 
                 Section("Upozornění") {
                     Toggle("Upozornit na odchod a příjezd", isOn: $notificationsEnabled)
+                    HStack {
+                        Label("Stav oznámení", systemImage: notificationStatusIcon)
+                        Spacer()
+                        Text(notificationStatusTitle)
+                            .foregroundStyle(WaymintTheme.secondaryText)
+                    }
+                    Button {
+                        testNotifications()
+                    } label: {
+                        Label("Poslat test za 5 sekund", systemImage: "bell.badge")
+                    }
+                    .disabled(notificationAuthorizationStatus == .denied)
+                    if notificationAuthorizationStatus == .denied {
+                        Button {
+                            guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
+                            UIApplication.shared.open(url)
+                        } label: {
+                            Label("Otevřít nastavení oznámení", systemImage: "gear")
+                        }
+                    }
                     Text("Waymint může připomenout čas odchodu, správný čas u místa a vstupenky poblíž zastávky.")
                         .font(.caption)
                         .foregroundStyle(WaymintTheme.secondaryText)
                 }
 
                 Section("GPS automatika") {
-                    Stepper("Příchod do \(gpsArrivalRadius) m", value: $gpsArrivalRadius, in: 30...150, step: 5)
-                    Stepper("Odchod od \(gpsDepartureRadius) m", value: $gpsDepartureRadius, in: 80...300, step: 10)
-                    Stepper("Potvrdit odchod po \(gpsDepartureConfirmationSeconds) s", value: $gpsDepartureConfirmationSeconds, in: 10...60, step: 5)
-                    Text("Větší rozdíl mezi příchodem a odchodem omezuje falešné přepnutí při nepřesné GPS.")
+                    HStack {
+                        Label("Přístup k poloze", systemImage: "location.fill")
+                        Spacer()
+                        Text(locationAuthorizationTitle)
+                            .foregroundStyle(WaymintTheme.secondaryText)
+                    }
+                    Button {
+                        guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
+                        UIApplication.shared.open(url)
+                    } label: {
+                        Label("Otevřít nastavení polohy", systemImage: "gear")
+                    }
+                    DisclosureGroup("Pokročilé nastavení GPS") {
+                        Stepper(WaymintLocalization.format("Příchod do %d m", gpsArrivalRadius), value: $gpsArrivalRadius, in: 30...150, step: 5)
+                        Stepper(WaymintLocalization.format("Odchod od %d m", gpsDepartureRadius), value: $gpsDepartureRadius, in: 80...300, step: 10)
+                        Stepper(WaymintLocalization.format("Potvrdit odchod po %d s", gpsDepartureConfirmationSeconds), value: $gpsDepartureConfirmationSeconds, in: 10...60, step: 5)
+                        Text("Větší rozdíl mezi příchodem a odchodem omezuje falešné přepnutí při nepřesné GPS.")
+                            .font(.caption)
+                            .foregroundStyle(WaymintTheme.secondaryText)
+                    }
+                }
+
+                Section("Baterie") {
+                    Toggle("Nouzový úsporný režim", isOn: $emergencyPowerMode)
+                    Text("Při zapnutém režimu nízké spotřeby Waymint sníží přesnost a četnost GPS aktualizací. Automatické přepnutí zastávky zůstane konzervativní.")
                         .font(.caption)
                         .foregroundStyle(WaymintTheme.secondaryText)
                 }
 
                 Section("Lock Screen a Dynamic Island") {
-                    Toggle("Aktuální zastávka", isOn: $showCurrentStop)
-                    Toggle("Další zastávka", isOn: $showNextStop)
-                    Toggle("Čas odchodu", isOn: $showDepartureTime)
-                    Toggle("Zpoždění", isOn: $showDelay)
+                    Picker("Hlavní údaj", selection: $liveActivityPreset) {
+                        Text("Příští odchod").tag("departure")
+                        Text("Čas na místě").tag("remaining")
+                        Text("Navigace k cíli").tag("navigation")
+                        Text("Celkové zpoždění").tag("delay")
+                    }
+                    DisclosureGroup("Vlastní zobrazení") {
+                        Toggle("Aktuální zastávka", isOn: $showCurrentStop)
+                        Toggle("Další zastávka", isOn: $showNextStop)
+                        Toggle("Čas odchodu", isOn: $showDepartureTime)
+                        Toggle("Zpoždění", isOn: $showDelay)
+                    }
                 }
 
                 Section("Vzhled") {
@@ -105,11 +177,19 @@ struct AppSettingsView: View {
                 }
 
                 Section("Nápověda") {
+                    Button { showingDataHealth = true } label: {
+                        Label("Zkontrolovat data", systemImage: "checkmark.shield")
+                    }
                     Button {
                         hasSeenOnboarding = false
                         dismiss()
                     } label: {
                         Label("Zobrazit průvodce znovu", systemImage: "questionmark.circle")
+                    }
+                    Button {
+                        exportDiagnostics()
+                    } label: {
+                        Label("Exportovat anonymní diagnostiku", systemImage: "stethoscope")
                     }
                 }
             }
@@ -140,16 +220,25 @@ struct AppSettingsView: View {
             } message: {
                 Text("Data ze souboru byla přidaná do Waymint.")
             }
+            .alert("Oznámení", isPresented: Binding(get: { notificationMessage != nil }, set: { if !$0 { notificationMessage = nil } })) {
+                Button("OK", role: .cancel) { notificationMessage = nil }
+            } message: {
+                Text(notificationMessage ?? "")
+            }
             .sheet(item: $exportedLibraryFile) { file in
                 ShareSheet(activityItems: [
                     WaymintFileActivityItem(url: file.url, title: "Waymint záloha")
                 ])
+            }
+            .sheet(item: $exportedDiagnosticsFile) { file in
+                ShareSheet(activityItems: [file.url])
             }
             .sheet(isPresented: $showingTextImport) {
                 WaymintTextImportView { text in
                     importLibrary(fromText: text)
                 }
             }
+            .sheet(isPresented: $showingDataHealth) { DataHealthView() }
             .fileImporter(
                 isPresented: $importingLibrary,
                 allowedContentTypes: [.waymintLibrary, .json],
@@ -157,11 +246,55 @@ struct AppSettingsView: View {
                 onCompletion: importLibrary
             )
         }
+        .onChange(of: notificationsEnabled) { _, enabled in
+            if !enabled {
+                NotificationScheduler().cancelAllNotifications()
+            } else {
+                Task {
+                    let allowed = (try? await NotificationScheduler().requestPermissionIfNeeded()) == true
+                    await refreshNotificationStatus()
+                    if !allowed {
+                        notificationsEnabled = false
+                        notificationMessage = WaymintLocalization.text("Oznámení jsou v systému vypnutá. Povol je prosím v Nastavení.")
+                    }
+                }
+            }
+        }
+        .onChange(of: liveActivityPreset) { _, preset in
+            switch preset {
+            case "remaining":
+                showCurrentStop = true; showNextStop = false; showDepartureTime = true; showDelay = false
+            case "navigation":
+                showCurrentStop = true; showNextStop = true; showDepartureTime = false; showDelay = false
+            case "delay":
+                showCurrentStop = true; showNextStop = false; showDepartureTime = false; showDelay = true
+            default:
+                showCurrentStop = true; showNextStop = true; showDepartureTime = true; showDelay = true
+            }
+        }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active {
+                locationAuthorizationStatus = CLLocationManager().authorizationStatus
+                Task { await refreshNotificationStatus() }
+            }
+        }
+        .task {
+            await refreshNotificationStatus()
+        }
     }
 
     private func exportLibrary() {
         do {
             exportedLibraryFile = ExportedWayFile(url: try exportService.exportLibrary(cities: cities))
+        } catch {
+            syncErrorMessage = error.localizedDescription
+            showingSyncError = true
+        }
+    }
+
+    private func exportDiagnostics() {
+        do {
+            exportedDiagnosticsFile = ExportedWayFile(url: try exportService.exportDiagnostics(cities: cities))
         } catch {
             syncErrorMessage = error.localizedDescription
             showingSyncError = true
@@ -199,6 +332,47 @@ struct AppSettingsView: View {
         showingImportDone = true
     }
 
+    @MainActor
+    private func refreshNotificationStatus() async {
+        notificationAuthorizationStatus = await NotificationScheduler().authorizationStatus()
+        if notificationAuthorizationStatus == .denied {
+            notificationsEnabled = false
+        }
+    }
+
+    private func testNotifications() {
+        Task {
+            do {
+                try await NotificationScheduler().scheduleTestNotification()
+                await refreshNotificationStatus()
+                notificationMessage = WaymintLocalization.text("Test je naplánovaný. Za pět sekund se zobrazí banner i při otevřené aplikaci.")
+            } catch {
+                await refreshNotificationStatus()
+                notificationMessage = error.localizedDescription
+            }
+        }
+    }
+
+    private var notificationStatusTitle: LocalizedStringKey {
+        switch notificationAuthorizationStatus {
+        case .authorized: "Povoleno"
+        case .provisional: "Doručováno potichu"
+        case .ephemeral: "Dočasně povoleno"
+        case .denied: "Zakázáno"
+        case .notDetermined: "Není nastaveno"
+        @unknown default: "Neznámé"
+        }
+    }
+
+    private var notificationStatusIcon: String {
+        switch notificationAuthorizationStatus {
+        case .authorized, .provisional, .ephemeral: "bell.fill"
+        case .denied: "bell.slash.fill"
+        case .notDetermined: "bell.badge"
+        @unknown default: "questionmark.circle"
+        }
+    }
+
     private var iCloudSyncBinding: Binding<Bool> {
         Binding(
             get: { ICloudSyncSettings.isEnabled },
@@ -216,6 +390,17 @@ struct AppSettingsView: View {
                 }
             }
         )
+    }
+
+    private var locationAuthorizationTitle: LocalizedStringKey {
+        switch locationAuthorizationStatus {
+        case .authorizedAlways: "Vždy"
+        case .authorizedWhenInUse: "Při používání"
+        case .denied: "Zakázáno"
+        case .restricted: "Omezeno"
+        case .notDetermined: "Není nastaveno"
+        @unknown default: "Neznámé"
+        }
     }
 
     private var iCloudStatusTitle: String {
@@ -270,7 +455,7 @@ private struct WaymintTextImportView: View {
 
                         Spacer()
 
-                        Text("\(text.count) znaků")
+                        Text(WaymintLocalization.format("%d znaků", text.count))
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(WaymintTheme.secondaryText)
                     }

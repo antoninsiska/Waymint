@@ -28,9 +28,10 @@ struct ScheduleCalculator {
     ) {
         guard stops.indices.contains(startIndex) else { return }
 
-        stops[startIndex].plannedArrival = arrival
+        let resolvedArrival = stops[startIndex].isTimeAnchor ? stops[startIndex].plannedArrival : arrival
+        stops[startIndex].plannedArrival = resolvedArrival
         stops[startIndex].plannedDeparture = plannedDeparture(
-            arrival: arrival,
+            arrival: resolvedArrival,
             visitDurationMinutes: stops[startIndex].plannedVisitDurationMinutes
         )
 
@@ -39,9 +40,10 @@ struct ScheduleCalculator {
             let previous = stops[index - 1]
             let stop = stops[index]
             let segment = segments.first { $0.toStopID == stop.id }
-            let travelMinutes = max(0, segment?.plannedDurationMinutes ?? inferredTravelMinutes(from: previous, to: stop))
+            let travelMinutes = resolvedTravelMinutes(segment: segment, from: previous, to: stop)
             let bufferMinutes = max(0, segment?.bufferMinutes ?? 0)
-            let nextArrival = previous.plannedDeparture.addingTimeInterval(TimeInterval((travelMinutes + bufferMinutes) * 60))
+            let calculatedArrival = previous.plannedDeparture.addingTimeInterval(TimeInterval((travelMinutes + bufferMinutes) * 60))
+            let nextArrival = stop.isTimeAnchor ? stop.plannedArrival : calculatedArrival
             stop.plannedArrival = nextArrival
             stop.plannedDeparture = plannedDeparture(
                 arrival: nextArrival,
@@ -97,7 +99,7 @@ struct ScheduleCalculator {
 
         let next = stops[nextIndex]
         let segment = segments.first { $0.toStopID == next.id }
-        let travelMinutes = max(0, segment?.plannedDurationMinutes ?? inferredTravelMinutes(from: stops[completedIndex], to: next))
+        let travelMinutes = resolvedTravelMinutes(segment: segment, from: stops[completedIndex], to: next)
         let bufferMinutes = max(0, segment?.bufferMinutes ?? 0)
         let arrival = departure.addingTimeInterval(TimeInterval((travelMinutes + bufferMinutes) * 60))
         recalculateFromArrival(arrival, at: nextIndex, stops: stops, segments: segments)
@@ -105,5 +107,12 @@ struct ScheduleCalculator {
 
     private func inferredTravelMinutes(from: TripStop, to: TripStop) -> Int {
         max(0, Int(to.plannedArrival.timeIntervalSince(from.plannedDeparture) / 60))
+    }
+
+    private func resolvedTravelMinutes(segment: TravelSegment?, from: TripStop, to: TripStop) -> Int {
+        if let storedMinutes = segment?.plannedDurationMinutes, storedMinutes > 0 {
+            return storedMinutes
+        }
+        return inferredTravelMinutes(from: from, to: to)
     }
 }

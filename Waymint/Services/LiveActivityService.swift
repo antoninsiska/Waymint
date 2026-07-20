@@ -6,19 +6,19 @@ import Foundation
 final class LiveActivityService: ObservableObject {
     @Published private(set) var activityID: String?
     @Published var errorMessage: String?
-    @Published private(set) var statusMessage = "Live Activity zatim neni spustena."
+    @Published private(set) var statusMessage = WaymintLocalization.text("Live Activity zatím není spuštěná.")
 
     func refreshStatus() {
         if let activity = Activity<WaymintTripActivityAttributes>.activities.first {
             activityID = activity.id
             errorMessage = nil
-            statusMessage = "Live Activity bezi. Dej appku na pozadi nebo zamkni zarizeni."
+            statusMessage = WaymintLocalization.text("Live Activity běží. Dej aplikaci na pozadí nebo zamkni zařízení.")
         } else if ActivityAuthorizationInfo().areActivitiesEnabled {
             activityID = nil
-            statusMessage = "Live Activities jsou povolene. Spust je tlacitkem nize."
+            statusMessage = WaymintLocalization.text("Live Activities jsou povolené. Spusť je tlačítkem níže.")
         } else {
             activityID = nil
-            statusMessage = "Live Activities nejsou na zarizeni povolene."
+            statusMessage = WaymintLocalization.text("Live Activities nejsou na zařízení povolené.")
         }
     }
 
@@ -32,8 +32,8 @@ final class LiveActivityService: ObservableObject {
         showDelay: Bool
     ) async {
         guard ActivityAuthorizationInfo().areActivitiesEnabled else {
-            errorMessage = "Live Activities nejsou na zarizeni povolene."
-            statusMessage = "Zapni Live Activities v nastaveni systemu."
+            errorMessage = WaymintLocalization.text("Live Activities nejsou na zařízení povolené.")
+            statusMessage = WaymintLocalization.text("Zapni Live Activities v nastavení systému.")
             return
         }
 
@@ -63,10 +63,10 @@ final class LiveActivityService: ObservableObject {
             )
             activityID = activity.id
             errorMessage = nil
-            statusMessage = "Live Activity spustena. Dej appku na pozadi nebo zamkni zarizeni."
+            statusMessage = WaymintLocalization.text("Live Activity je spuštěná. Dej aplikaci na pozadí nebo zamkni zařízení.")
         } catch {
-            errorMessage = "Live Activity se nepodarilo spustit: \(error.localizedDescription)"
-            statusMessage = "ActivityKit request selhal."
+            errorMessage = WaymintLocalization.format("Live Activity se nepodařilo spustit: %@", error.localizedDescription)
+            statusMessage = WaymintLocalization.text("Požadavek ActivityKit selhal.")
         }
     }
 
@@ -100,15 +100,19 @@ final class LiveActivityService: ObservableObject {
         guard let activity = currentActivity else { return }
         await activity.end(nil, dismissalPolicy: .immediate)
         activityID = nil
-        statusMessage = "Live Activity ukoncena."
+        statusMessage = WaymintLocalization.text("Live Activity byla ukončena.")
     }
 
     private var currentActivity: Activity<WaymintTripActivityAttributes>? {
-        Activity<WaymintTripActivityAttributes>.activities.first { $0.id == activityID }
+        if let activityID,
+           let matching = Activity<WaymintTripActivityAttributes>.activities.first(where: { $0.id == activityID }) {
+            return matching
+        }
+        return Activity<WaymintTripActivityAttributes>.activities.first
     }
 
     private func liveActivityStaleDate(for stop: TripStop) -> Date {
-        max(stop.plannedDeparture.addingTimeInterval(30 * 60), Date().addingTimeInterval(2 * 60 * 60))
+        max(stop.plannedDeparture.addingTimeInterval(60 * 60), Date().addingTimeInterval(8 * 60 * 60))
     }
 
     private func contentState(
@@ -127,7 +131,8 @@ final class LiveActivityService: ObservableObject {
         return WaymintTripActivityAttributes.ContentState(
             currentStopName: currentStop.title,
             nextStopName: nextStop?.title,
-            phaseTitle: isAtPlace ? "Na místě" : "Dojezd",
+            phaseTitle: WaymintLocalization.text(isAtPlace ? "Na místě" : "Dojezd"),
+            languageCode: liveActivityLanguageCode,
             remainingMinutes: max(0, Int(ceil(targetDate.timeIntervalSince(now) / 60))),
             targetDate: targetDate,
             plannedDeparture: currentStop.plannedDeparture,
@@ -137,5 +142,11 @@ final class LiveActivityService: ObservableObject {
             showDepartureTime: showDepartureTime,
             showDelay: showDelay
         )
+    }
+
+    private var liveActivityLanguageCode: String {
+        let selected = AppLanguage(rawValue: UserDefaults.standard.string(forKey: "waymintAppLanguage") ?? "system") ?? .system
+        if selected != .system { return selected.rawValue }
+        return Locale.current.language.languageCode?.identifier ?? "cs"
     }
 }

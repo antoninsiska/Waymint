@@ -14,12 +14,12 @@ struct InstagramTripCardService {
         case missingCoordinates
 
         var errorDescription: String? {
-            "Pro obrázek jsou potřeba souřadnice alespoň dvou zastávek."
+            WaymintLocalization.text("Pro obrázek jsou potřeba souřadnice alespoň dvou zastávek.")
         }
     }
 
-    func create(for trip: TripPlan, style: Style = .dark) async throws -> URL {
-        let stops = trip.sortedStops.filter(\.coordinateIsValid)
+    func create(for trip: TripPlan, style: Style = .dark, excludedStopIDs: Set<UUID> = []) async throws -> URL {
+        let stops = trip.sortedStops.filter { $0.coordinateIsValid && !excludedStopIDs.contains($0.id) }
         guard stops.count >= 2 else { throw CardError.missingCoordinates }
 
         let route = await routeCoordinates(for: trip, stops: stops)
@@ -132,9 +132,9 @@ struct InstagramTripCardService {
             drawText(subtitle, in: CGRect(x: 64, y: 1132, width: 952, height: 40), font: .systemFont(ofSize: 25, weight: .medium), color: secondary)
 
             let stats = [
-                ("VZDÁLENOST", distanceLabel(route.distance)),
-                ("DÉLKA", trip.approximateDurationMinutes.minutesLabel),
-                ("MÍSTA", "\(trip.stopCount)")
+                (WaymintLocalization.text("VZDÁLENOST"), distanceLabel(route.distance)),
+                (WaymintLocalization.text("DÉLKA"), trip.approximateDurationMinutes.minutesLabel),
+                (WaymintLocalization.text("MÍSTA"), "\(trip.stopCount)")
             ]
             for (index, stat) in stats.enumerated() {
                 let x = 64 + CGFloat(index) * 320
@@ -157,7 +157,7 @@ struct InstagramTripCardService {
             logo.draw(in: CGRect(x: 60, y: 54, width: 58, height: 58))
         }
         drawText("Waymint", in: CGRect(x: 132, y: 57, width: 250, height: 55), font: .systemFont(ofSize: 34, weight: .bold), color: color)
-        drawText("MY ROUTE", in: CGRect(x: 800, y: 68, width: 216, height: 35), font: .systemFont(ofSize: 18, weight: .bold), color: color.withAlphaComponent(0.52), alignment: .right)
+        drawText(WaymintLocalization.text("MOJE TRASA"), in: CGRect(x: 800, y: 68, width: 216, height: 35), font: .systemFont(ofSize: 18, weight: .bold), color: color.withAlphaComponent(0.52), alignment: .right)
     }
 
     private func drawText(_ text: String, in rect: CGRect, font: UIFont, color: UIColor, alignment: NSTextAlignment = .left) {
@@ -167,7 +167,10 @@ struct InstagramTripCardService {
     }
 
     private func distanceLabel(_ meters: CLLocationDistance) -> String {
-        meters >= 1_000 ? String(format: "%.1f km", meters / 1_000) : "\(Int(meters)) m"
+        if meters >= 1_000 {
+            return (meters / 1_000).formatted(.number.precision(.fractionLength(1)).locale(WaymintLocalization.currentLocale)) + " km"
+        }
+        return Int(meters).formatted(.number.locale(WaymintLocalization.currentLocale)) + " m"
     }
 
     private func coordinate(for stop: TripStop) -> CLLocationCoordinate2D {

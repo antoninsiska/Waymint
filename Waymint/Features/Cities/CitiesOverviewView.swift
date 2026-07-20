@@ -29,7 +29,7 @@ struct CitiesOverviewView: View {
                         Button {
                             showingNewCity = true
                         } label: {
-                            Label("Vytvorit prvni mesto", systemImage: "plus")
+                            Label("Vytvořit první město", systemImage: "plus")
                                 .frame(maxWidth: .infinity)
                         }
                         .buttonStyle(.borderedProminent)
@@ -65,7 +65,7 @@ struct CitiesOverviewView: View {
                 }
             }
             .navigationTitle("Waymint")
-            .searchable(text: $searchText, prompt: "Hledat mesto")
+            .searchable(text: $searchText, prompt: "Hledat město")
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     if !cities.isEmpty && searchText.isEmpty {
@@ -74,15 +74,17 @@ struct CitiesOverviewView: View {
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     HStack {
-                        if placeBankEnabled {
-                            Button { showingPlaceBank = true } label: {
-                                Label("Banka míst", systemImage: "square.grid.2x2")
+                        Menu {
+                            if placeBankEnabled {
+                                Button { showingPlaceBank = true } label: {
+                                    Label("Banka míst", systemImage: "square.grid.2x2")
+                                }
                             }
-                        }
-                        Button {
-                            showingSettings = true
+                            Button { showingSettings = true } label: {
+                                Label("Nastavení", systemImage: "gearshape")
+                            }
                         } label: {
-                            Label("Nastavení", systemImage: "gearshape")
+                            Label("Další akce", systemImage: "ellipsis.circle")
                         }
 
                         Button {
@@ -138,7 +140,7 @@ private struct WaymintStartCard: View {
                 Image(systemName: "point.topleft.down.curvedto.point.bottomright.up")
                     .font(.title2.weight(.semibold))
                 Spacer()
-                Text("\(cityCount) mest")
+                Text(localizedCount(cityCount, one: "%d město", few: "%d města", many: "%d měst"))
                     .font(.caption.weight(.semibold))
                     .padding(.horizontal, 10)
                     .padding(.vertical, 6)
@@ -164,6 +166,11 @@ private struct WaymintStartCard: View {
             in: RoundedRectangle(cornerRadius: 22)
         )
     }
+
+    private func localizedCount(_ count: Int, one: String, few: String, many: String) -> String {
+        let key = count == 1 ? one : ((2...4).contains(count) ? few : many)
+        return WaymintLocalization.format(key, count)
+    }
 }
 
 private struct CityCardView: View {
@@ -185,12 +192,12 @@ private struct CityCardView: View {
                     .font(.headline)
                     .foregroundStyle(WaymintTheme.primaryText)
 
-                Text(city.country.isEmpty ? "Bez zeme" : city.country)
+                Text(WaymintLocalization.countryName(city.country))
                     .font(.subheadline)
                     .foregroundStyle(WaymintTheme.secondaryText)
 
                 HStack {
-                    StatusPill("\(city.tripPlanCount) planu", systemImage: "calendar")
+                    StatusPill(localizedPlanCount, systemImage: "calendar")
                     if let nextPlan = city.sortedTripPlans.sorted(by: { $0.date < $1.date }).first {
                         Text(nextPlan.date.waymintDate)
                             .font(.caption)
@@ -200,6 +207,12 @@ private struct CityCardView: View {
             }
         }
         .padding(.vertical, 8)
+    }
+
+    private var localizedPlanCount: String {
+        let count = city.tripPlanCount
+        let key = count == 1 ? "%d plán" : ((2...4).contains(count) ? "%d plány" : "%d plánů")
+        return WaymintLocalization.format(key, count)
     }
 }
 

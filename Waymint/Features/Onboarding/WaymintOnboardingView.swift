@@ -57,7 +57,11 @@ struct WaymintOnboardingView: View {
                         }
                     }
                 } label: {
-                    Label(page == pages.count - 1 ? "Začít plánovat" : "Pokračovat", systemImage: page == pages.count - 1 ? "checkmark.circle.fill" : "arrow.right")
+                    Label {
+                        Text(LocalizedStringKey(page == pages.count - 1 ? "Začít plánovat" : "Pokračovat"))
+                    } icon: {
+                        Image(systemName: page == pages.count - 1 ? "checkmark.circle.fill" : "arrow.right")
+                    }
                         .font(.headline)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 14)
@@ -90,12 +94,12 @@ private struct OnboardingPageView: View {
                         .background(WaymintTheme.lightGreen, in: RoundedRectangle(cornerRadius: 24))
 
                     VStack(spacing: 10) {
-                        Text(page.title)
+                        Text(LocalizedStringKey(page.title))
                             .font(.system(.title, design: .rounded).weight(.bold))
                             .foregroundStyle(WaymintTheme.primaryText)
                             .multilineTextAlignment(.center)
 
-                        Text(page.message)
+                        Text(LocalizedStringKey(page.message))
                             .font(.body)
                             .foregroundStyle(WaymintTheme.secondaryText)
                             .multilineTextAlignment(.center)
@@ -110,10 +114,10 @@ private struct OnboardingPageView: View {
                                     .foregroundStyle(WaymintTheme.primaryGreen)
                                     .frame(width: 24)
                                 VStack(alignment: .leading, spacing: 3) {
-                                    Text(point.title)
+                                    Text(LocalizedStringKey(point.title))
                                         .font(.subheadline.weight(.bold))
                                         .foregroundStyle(WaymintTheme.primaryText)
-                                    Text(point.message)
+                                    Text(LocalizedStringKey(point.message))
                                         .font(.caption)
                                         .foregroundStyle(WaymintTheme.secondaryText)
                                 }

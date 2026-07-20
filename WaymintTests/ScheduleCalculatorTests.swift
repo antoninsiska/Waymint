@@ -62,6 +62,31 @@ final class ScheduleCalculatorTests: XCTestCase {
         )
     }
 
+    func testStoredZeroTransferDoesNotCollapseExistingTimeline() {
+        let trip = makeTrip()
+        let originalArrival = trip.sortedStops[1].plannedArrival
+        trip.sortedTravelSegments[0].plannedDurationMinutes = 0
+
+        calculator.recalculateTrip(trip, anchor: trip.sortedStops[0].plannedArrival)
+
+        XCTAssertEqual(trip.sortedStops[1].plannedArrival, originalArrival)
+    }
+
+    func testFixedTimeAnchorIsNotMovedByEarlierDelay() {
+        let trip = makeTrip()
+        let fixedArrival = trip.sortedStops[1].plannedArrival
+        trip.sortedStops[1].isTimeAnchor = true
+
+        calculator.recalculateAfterDeparture(
+            trip.sortedStops[0].plannedDeparture.addingTimeInterval(40 * 60),
+            from: 0,
+            stops: trip.sortedStops,
+            segments: trip.sortedTravelSegments
+        )
+
+        XCTAssertEqual(trip.sortedStops[1].plannedArrival, fixedArrival)
+    }
+
     func testDeletingStopReconnectsRemainingTimeline() {
         let trip = makeThreeStopTrip()
         let removedID = trip.sortedStops[1].id
@@ -74,6 +99,29 @@ final class ScheduleCalculatorTests: XCTestCase {
         XCTAssertEqual(trip.sortedTravelSegments[0].toStopID, trip.sortedStops[1].id)
         XCTAssertNil(trip.sortedTravelSegments[1].fromStopID)
         XCTAssertNil(trip.sortedTravelSegments[1].toStopID)
+    }
+
+    func testDiagnosticsFindMissingGPSAndBrokenConnections() {
+        let trip = makeTrip()
+        trip.sortedStops[0].latitude = nil
+        trip.sortedStops[0].longitude = nil
+        trip.sortedTravelSegments[0].toStopID = nil
+        let city = CityPlan(name: "Test", tripPlans: [trip])
+
+        let issues = WaymintDataDiagnostics.issues(in: [city])
+
+        XCTAssertTrue(issues.contains { $0.title.contains("GPS") })
+        XCTAssertTrue(issues.contains { $0.title == "Nepropojené přesuny" })
+    }
+
+    func testDiagnosticsFindZeroTransferDuration() {
+        let trip = makeTrip()
+        trip.sortedTravelSegments[0].plannedDurationMinutes = 0
+        let city = CityPlan(name: "Test", tripPlans: [trip])
+
+        let issues = WaymintDataDiagnostics.issues(in: [city])
+
+        XCTAssertTrue(issues.contains { $0.title == "Nulová délka přesunu" })
     }
 
     private func makeTrip() -> TripPlan {

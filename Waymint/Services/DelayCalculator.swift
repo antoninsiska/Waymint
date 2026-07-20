@@ -8,12 +8,12 @@ struct DelaySummary: Equatable {
 
     var message: String {
         if minutes > 0 {
-            return "Jsi \(minutes) min ve zpozdeni."
+            return WaymintLocalization.format("Jsi %d min ve zpoždění.", minutes)
         }
         if minutes < 0 {
-            return "Jsi \(abs(minutes)) min napred."
+            return WaymintLocalization.format("Jsi %d min napřed.", abs(minutes))
         }
-        return "Jedes presne podle planu."
+        return WaymintLocalization.text("Jedeš přesně podle plánu.")
     }
 }
 
@@ -29,14 +29,13 @@ struct DelayCalculator {
 
     func suggestedActions(for stop: TripStop, delay: DelaySummary) -> [String] {
         guard delay.isDelayed else {
-            return ["Pokracovat podle planu"]
+            return ["Pokračovat podle plánu"]
         }
 
-        var actions = ["Zkratit aktualni zastavku", "Posunout nasledujici zastavky", "Pokracovat bez zmeny"]
+        var actions = ["Zkrátit aktuální zastávku", "Posunout následující zastávky", "Pokračovat bez změny"]
         if !stop.isRequired {
-            actions.insert("Preskocit volitelnou zastavku", at: 1)
+            actions.insert("Přeskočit volitelnou zastávku", at: 1)
         }
         return actions
     }
 }
-

@@ -16,7 +16,7 @@ struct WaymintHomeWidget: Widget {
             WaymintHomeWidgetView(entry: entry)
         }
         .configurationDisplayName("Waymint")
-        .description("Rychly prehled aktivni cesty.")
+        .description("Rychlý přehled aktivní cesty.")
         .supportedFamilies([.systemSmall, .systemMedium])
     }
 }
@@ -51,7 +51,7 @@ private struct WaymintHomeWidgetView: View {
             Text("Waymint")
                 .font(.headline)
 
-            Text("Spust aktivni cestu v aplikaci.")
+            Text("Spusť aktivní cestu v aplikaci.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
@@ -85,7 +85,7 @@ struct WaymintTripLiveActivity: Widget {
                     VStack(spacing: 7) {
                         HStack(spacing: 8) {
                             if context.state.showDelay {
-                                DelayBadge(minutes: context.state.delayMinutes, compact: true)
+                                DelayBadge(minutes: context.state.delayMinutes, languageCode: context.state.languageCode, compact: true)
                                     .frame(maxWidth: 118)
                             }
 
@@ -99,7 +99,7 @@ struct WaymintTripLiveActivity: Widget {
                             }
                         }
 
-                        DynamicIslandControls(tripID: context.attributes.tripID)
+                        DynamicIslandControls(tripID: context.attributes.tripID, languageCode: context.state.languageCode)
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.horizontal, 20)
@@ -164,7 +164,7 @@ private struct CompactWaymintMark: View {
         }
         .frame(width: minimal ? 22 : 20, height: minimal ? 22 : 20)
         .overlay(alignment: .bottomTrailing) {
-            Image(systemName: phaseTitle == "Na místě" ? "circle.fill" : "arrow.up.right")
+            Image(systemName: isAtPlacePhase ? "circle.fill" : "arrow.up.right")
                 .font(.system(size: 5, weight: .black))
                 .foregroundStyle(Color(red: 0.56, green: 0.95, blue: 0.70))
                 .padding(2)
@@ -174,13 +174,17 @@ private struct CompactWaymintMark: View {
         .padding(.leading, minimal ? 0 : 2)
         .accessibilityLabel("Waymint · \(phaseTitle)")
     }
+
+    private var isAtPlacePhase: Bool {
+        phaseTitle == "Na místě" || phaseTitle == "At place"
+    }
 }
 
 private struct CompactCountdown: View {
     let targetDate: Date
 
     var body: some View {
-        Text(timerInterval: Date()...max(targetDate, Date()), countsDown: true)
+        Text(targetDate, style: .timer)
             .font(.system(size: 11, weight: .black, design: .rounded))
             .monospacedDigit()
             .foregroundStyle(Color(red: 0.70, green: 1.0, blue: 0.82))
@@ -193,6 +197,7 @@ private struct CompactCountdown: View {
 
 private struct DynamicIslandControls: View {
     let tripID: UUID
+    let languageCode: String
 
     var body: some View {
         HStack(spacing: 7) {
@@ -203,13 +208,13 @@ private struct DynamicIslandControls: View {
                 url: controlURL("start")
             )
             DynamicIslandControlLink(
-                title: "Hotovo",
+                title: languageCode == "en" ? "Done" : "Hotovo",
                 systemImage: "checkmark",
                 tint: Color(red: 0.56, green: 0.95, blue: 0.70),
                 url: controlURL("complete")
             )
             DynamicIslandControlLink(
-                title: "Přeskočit",
+                title: languageCode == "en" ? "Skip" : "Přeskočit",
                 systemImage: "forward.fill",
                 tint: Color(red: 1.0, green: 0.72, blue: 0.38),
                 url: controlURL("skip")
@@ -275,7 +280,7 @@ private struct DynamicIslandTimePill: View {
 
     var body: some View {
         VStack(spacing: 1) {
-            Text(timerInterval: Date()...max(context.state.targetDate, Date()), countsDown: true)
+            Text(context.state.targetDate, style: .timer)
                 .font(.system(size: 12, weight: .black, design: .rounded))
                 .monospacedDigit()
                 .foregroundStyle(.white)
@@ -299,7 +304,7 @@ private struct CompactPhaseIcon: View {
     let phaseTitle: String
 
     var body: some View {
-        Image(systemName: phaseTitle == "Na místě" ? "timer" : "arrow.triangle.turn.up.right.diamond.fill")
+        Image(systemName: (phaseTitle == "Na místě" || phaseTitle == "At place") ? "timer" : "arrow.triangle.turn.up.right.diamond.fill")
             .font(.system(size: 10, weight: .bold))
             .foregroundStyle(Color(red: 0.46, green: 0.9, blue: 0.66))
             .frame(width: 18, height: 18)
@@ -340,14 +345,14 @@ private struct LiveActivityLockScreenView: View {
             HStack(spacing: 8) {
                 if context.state.showNextStop, let nextStopName = context.state.nextStopName {
                     LockScreenInfoChip(
-                        title: "Následuje",
+                        title: context.state.languageCode == "en" ? "Next" : "Následuje",
                         value: nextStopName,
                         systemImage: "arrow.right"
                     )
                 }
 
                 if context.state.showDelay {
-                    LockScreenDelayChip(minutes: context.state.delayMinutes)
+                    LockScreenDelayChip(minutes: context.state.delayMinutes, languageCode: context.state.languageCode)
                 }
             }
         }
@@ -407,7 +412,7 @@ private struct LockScreenPhaseMark: View {
                 .fill(.white.opacity(0.13))
                 .frame(width: 54, height: 54)
 
-            Image(systemName: phaseTitle == "Na místě" ? "timer" : "arrow.triangle.turn.up.right.diamond.fill")
+            Image(systemName: (phaseTitle == "Na místě" || phaseTitle == "At place") ? "timer" : "arrow.triangle.turn.up.right.diamond.fill")
                 .font(.system(size: 24, weight: .black))
                 .foregroundStyle(Color(red: 0.56, green: 0.95, blue: 0.70))
         }
@@ -419,7 +424,7 @@ private struct LockScreenTimeBlock: View {
 
     var body: some View {
         VStack(alignment: .trailing, spacing: 4) {
-            Text(timerInterval: Date()...max(context.state.targetDate, Date()), countsDown: true)
+            Text(context.state.targetDate, style: .timer)
                 .font(.system(size: 30, weight: .black, design: .rounded))
                 .monospacedDigit()
                 .foregroundStyle(.white)
@@ -478,6 +483,7 @@ private struct LockScreenInfoChip: View {
 
 private struct LockScreenDelayChip: View {
     let minutes: Int
+    let languageCode: String
 
     var body: some View {
         Label(delayText, systemImage: minutes > 0 ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
@@ -497,12 +503,13 @@ private struct LockScreenDelayChip: View {
         if minutes < 0 {
             return "-\(abs(minutes).compactMinutesText)"
         }
-        return "Včas"
+        return languageCode == "en" ? "On time" : "Včas"
     }
 }
 
 private struct DelayBadge: View {
     let minutes: Int
+    let languageCode: String
     var compact = false
 
     var body: some View {
@@ -531,12 +538,12 @@ private struct DelayBadge: View {
         }
 
         if minutes > 0 {
-            return compact ? "+\(timeText)" : "\(timeText) zpoždění"
+            return compact ? "+\(timeText)" : (languageCode == "en" ? "\(timeText) late" : "\(timeText) zpoždění")
         }
         if minutes < 0 {
-            return compact ? "-\(timeText)" : "\(timeText) napřed"
+            return compact ? "-\(timeText)" : (languageCode == "en" ? "\(timeText) ahead" : "\(timeText) napřed")
         }
-        return compact ? "Včas" : "Podle plánu"
+        return compact ? (languageCode == "en" ? "On time" : "Včas") : (languageCode == "en" ? "On schedule" : "Podle plánu")
     }
 
     private var icon: String {

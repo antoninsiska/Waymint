@@ -20,6 +20,7 @@ struct TripPlanFormView: View {
     @State private var photoAlbumTitle: String?
     @State private var showingAlbumPicker = false
     @State private var note = ""
+    @State private var delayResponseStrategy = DelayResponseStrategy.shiftEverything
     private let scheduleCalculator = ScheduleCalculator()
 
     var body: some View {
@@ -38,7 +39,7 @@ struct TripPlanFormView: View {
                     }
                     Picker("Stav", selection: $status) {
                         ForEach(TripPlanStatus.allCases) { status in
-                            Text(status.title).tag(status)
+                            Text(LocalizedStringKey(status.title)).tag(status)
                         }
                     }
                     if let trip, trip.stopCount > 0 {
@@ -48,10 +49,21 @@ struct TripPlanFormView: View {
                     }
                 }
 
-                Section("Landing page") {
+                Section("Úvodní stránka") {
                     TextField("Nadpis", text: $landingTitle)
-                    TextField("Kratky popis", text: $landingSubtitle, axis: .vertical)
+                    TextField("Krátký popis", text: $landingSubtitle, axis: .vertical)
                         .lineLimit(2...5)
+                }
+
+                Section("Při zpoždění") {
+                    Picker("Reakce aplikace", selection: $delayResponseStrategy) {
+                        ForEach(DelayResponseStrategy.allCases) { strategy in
+                            Text(LocalizedStringKey(strategy.title)).tag(strategy)
+                        }
+                    }
+                    Text("Pevné časy označené u trajektu, vlaku nebo rezervace se neposouvají.")
+                        .font(.caption)
+                        .foregroundStyle(WaymintTheme.secondaryText)
                 }
 
                 Section("Album z Apple Photos") {
@@ -113,6 +125,7 @@ struct TripPlanFormView: View {
         photoAlbumLocalIdentifier = trip.photoAlbumLocalIdentifier
         photoAlbumTitle = trip.photoAlbumTitle
         note = trip.note
+        delayResponseStrategy = trip.delayResponseStrategy
     }
 
     private func save() {
@@ -131,6 +144,7 @@ struct TripPlanFormView: View {
             trip.photoAlbumLocalIdentifier = photoAlbumLocalIdentifier
             trip.photoAlbumTitle = photoAlbumTitle
             trip.note = note
+            trip.delayResponseStrategy = delayResponseStrategy
             trip.updatedAt = .now
         } else {
             let newTrip = TripPlan(
@@ -138,6 +152,7 @@ struct TripPlanFormView: View {
                 date: date,
                 startTime: normalizedStartTime,
                 hasFixedStartTime: hasFixedStartTime,
+                delayResponseStrategy: delayResponseStrategy,
                 status: status,
                 sortIndex: nextSortIndex,
                 landingTitle: landingTitle.trimmingCharacters(in: .whitespacesAndNewlines),

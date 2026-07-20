@@ -4,6 +4,8 @@ enum TripPlanStatus: String, CaseIterable, Identifiable, Codable {
     case draft
     case planned
     case active
+    case paused
+    case stopped
     case completed
     case archived
 
@@ -11,12 +13,13 @@ enum TripPlanStatus: String, CaseIterable, Identifiable, Codable {
 
     var title: String {
         switch self {
-        case .draft: "Rozpracovany"
-        case .planned: "Naplanovany"
-        case .active: "Aktivni"
-        case .completed: "Dokonceny"
+        case .draft: "Rozpracovaný"
+        case .planned: "Naplánovaný"
+        case .active: "Aktivní"
+        case .paused: "Pozastavená"
+        case .stopped: "Zastavená"
+        case .completed: "Dokončený"
         case .archived: "Archiv"
         }
     }
 }
-

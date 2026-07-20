@@ -41,7 +41,7 @@ struct StatusPill: View {
 
     var body: some View {
         Label {
-            Text(text)
+            Text(LocalizedStringKey(text))
                 .font(.caption.weight(.semibold))
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
@@ -65,9 +65,9 @@ struct EmptyStateView: View {
 
     var body: some View {
         ContentUnavailableView {
-            Label(title, systemImage: systemImage)
+            Label { Text(LocalizedStringKey(title)) } icon: { Image(systemName: systemImage) }
         } description: {
-            Text(message)
+            Text(LocalizedStringKey(message))
         }
     }
 }

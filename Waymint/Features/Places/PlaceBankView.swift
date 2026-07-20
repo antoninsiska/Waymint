@@ -138,7 +138,9 @@ private struct PlaceBankFormView: View {
                 Section("Místo") {
                     TextField("Název", text: $title)
                     Picker("Typ", selection: $stopType) {
-                        ForEach(StopType.allCases) { Label($0.title, systemImage: $0.systemImage).tag($0) }
+                        ForEach(StopType.allCases) { type in
+                            Label { Text(LocalizedStringKey(type.title)) } icon: { Image(systemName: type.systemImage) }.tag(type)
+                        }
                     }
                     TextField("Adresa", text: $address)
                     TextField("Zeměpisná šířka", text: $latitude).keyboardType(.numbersAndPunctuation)
@@ -163,12 +165,12 @@ private struct PlaceBankFormView: View {
                 }
                 if let duplicatePlace {
                     Section {
-                        Label("Toto místo už v bance existuje jako „\(duplicatePlace.title)“.", systemImage: "exclamationmark.triangle.fill")
+                        Label(WaymintLocalization.format("Toto místo už v bance existuje jako „%@“.", duplicatePlace.title), systemImage: "exclamationmark.triangle.fill")
                             .foregroundStyle(WaymintTheme.warning)
                     }
                 }
             }
-            .navigationTitle(place == nil ? "Nové místo" : "Upravit místo")
+            .navigationTitle(Text(LocalizedStringKey(place == nil ? "Nové místo" : "Upravit místo")))
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Zrušit") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {

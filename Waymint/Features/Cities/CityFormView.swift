@@ -16,24 +16,24 @@ struct CityFormView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Mesto") {
-                    TextField("Nazev", text: $name)
-                    TextField("Zeme", text: $country)
+                Section("Město") {
+                    TextField("Název", text: $name)
+                    TextField("Země", text: $country)
                 }
 
-                Section("Landing page") {
+                Section("Úvodní stránka") {
                     TextField("Nadpis", text: $landingTitle)
-                    TextField("Kratky popis", text: $landingSubtitle, axis: .vertical)
+                    TextField("Krátký popis", text: $landingSubtitle, axis: .vertical)
                         .lineLimit(2...5)
                 }
             }
-            .navigationTitle(city == nil ? "Nove mesto" : "Upravit mesto")
+            .navigationTitle(Text(LocalizedStringKey(city == nil ? "Nové město" : "Upravit město")))
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Zrusit") { dismiss() }
+                    Button("Zrušit") { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Ulozit", action: save)
+                    Button("Uložit", action: save)
                         .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
             }

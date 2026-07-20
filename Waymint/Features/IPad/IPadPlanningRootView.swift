@@ -73,7 +73,9 @@ struct IPadPlanningRootView: View {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(city.name)
                                     .font(.headline)
-                                Text(city.country.isEmpty ? "\(city.tripPlanCount) cest" : "\(city.country) · \(city.tripPlanCount) cest")
+                                Text(city.country.isEmpty
+                                     ? WaymintLocalization.format("%d cest", city.tripPlanCount)
+                                     : WaymintLocalization.format("%@ · %d cest", WaymintLocalization.countryName(city.country), city.tripPlanCount))
                                     .font(.caption)
                                     .foregroundStyle(WaymintTheme.secondaryText)
                             }
@@ -257,6 +259,10 @@ struct IPadPlanningRootView: View {
 private struct IPadTripRow: View {
     let trip: TripPlan
 
+    private var issueCount: Int {
+        TripReadinessChecker.issues(for: trip).count
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
@@ -264,6 +270,16 @@ private struct IPadTripRow: View {
                     .font(.headline)
                     .foregroundStyle(WaymintTheme.primaryText)
                 Spacer()
+                if issueCount > 0 {
+                    Label("\(issueCount)", systemImage: "exclamationmark.triangle.fill")
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(WaymintTheme.warning)
+                        .accessibilityLabel(WaymintLocalization.format("%d problémů před cestou", issueCount))
+                } else if trip.stopCount > 0 {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundStyle(WaymintTheme.success)
+                        .accessibilityLabel("Cesta je připravená")
+                }
                 StatusPill(trip.status.title, tint: WaymintTheme.primaryGreen)
             }
             Text("\(trip.date.waymintDate) · \(trip.scheduleLabel)")
@@ -272,7 +288,9 @@ private struct IPadTripRow: View {
             HStack(spacing: 10) {
                 Label("\(trip.stopCount)", systemImage: "mappin")
                 Label(trip.hasFixedStartTime ? trip.approximateDurationMinutes.minutesLabel : trip.scheduleLabel, systemImage: "clock")
-                Label("\(trip.ticketCount)", systemImage: "ticket")
+                if trip.totalTicketCount > 0 {
+                    Label("\(trip.totalTicketCount)", systemImage: "ticket")
+                }
             }
             .font(.caption)
             .foregroundStyle(WaymintTheme.secondaryText)
@@ -291,9 +309,9 @@ struct IPadEmptyPanel: View {
             Image(systemName: systemImage)
                 .font(.system(size: 54, weight: .semibold))
                 .foregroundStyle(WaymintTheme.primaryGreen)
-            Text(title)
+            Text(LocalizedStringKey(title))
                 .font(.system(.title, design: .rounded).weight(.bold))
-            Text(message)
+            Text(LocalizedStringKey(message))
                 .font(.body)
                 .foregroundStyle(WaymintTheme.secondaryText)
                 .multilineTextAlignment(.center)

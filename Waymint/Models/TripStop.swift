@@ -21,6 +21,8 @@ final class TripStop {
     var actualEnd: Date?
     var createdAt: Date = Date()
     var updatedAt: Date = Date()
+    var sourceBankPlaceID: UUID?
+    var isTimeAnchor: Bool = false
 
     var tripPlan: TripPlan?
 
@@ -52,6 +54,8 @@ final class TripStop {
         actualEnd: Date? = nil,
         createdAt: Date = .now,
         updatedAt: Date = .now,
+        sourceBankPlaceID: UUID? = nil,
+        isTimeAnchor: Bool = false,
         checklistItems: [StopChecklistItem] = [],
         tickets: [TicketItem] = [],
         attachments: [AttachmentItem] = []
@@ -74,6 +78,8 @@ final class TripStop {
         self.actualEnd = actualEnd
         self.createdAt = createdAt
         self.updatedAt = updatedAt
+        self.sourceBankPlaceID = sourceBankPlaceID
+        self.isTimeAnchor = isTimeAnchor
         self.checklistItems = checklistItems
         self.tickets = tickets
         self.attachments = attachments
@@ -98,7 +104,7 @@ final class TripStop {
     }
 
     var ticketCount: Int {
-        tickets?.count ?? 0
+        sortedTickets.filter(\.isUsableTicket).count
     }
 
     var checklistItemCount: Int {

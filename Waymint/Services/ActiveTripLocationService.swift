@@ -9,6 +9,7 @@ final class ActiveTripLocationService: NSObject, ObservableObject, CLLocationMan
     @Published private(set) var errorMessage: String?
 
     private let manager = CLLocationManager()
+    private var didRequestAlwaysAuthorization = false
 
     override init() {
         authorizationStatus = manager.authorizationStatus
@@ -25,10 +26,13 @@ final class ActiveTripLocationService: NSObject, ObservableObject, CLLocationMan
         switch manager.authorizationStatus {
         case .notDetermined:
             manager.requestWhenInUseAuthorization()
-        case .authorizedAlways, .authorizedWhenInUse:
+        case .authorizedWhenInUse:
+            manager.startUpdatingLocation()
+            requestAlwaysAuthorizationIfNeeded()
+        case .authorizedAlways:
             manager.startUpdatingLocation()
         case .denied, .restricted:
-            errorMessage = "Poloha není povolená. GPS korekci můžeš zapnout v Nastavení systému."
+            errorMessage = WaymintLocalization.text("Poloha není povolená. GPS korekci můžeš zapnout v Nastavení systému.")
         @unknown default:
             break
         }
@@ -38,9 +42,18 @@ final class ActiveTripLocationService: NSObject, ObservableObject, CLLocationMan
         manager.stopUpdatingLocation()
     }
 
+    func configure(lowPower: Bool) {
+        manager.desiredAccuracy = lowPower ? kCLLocationAccuracyHundredMeters : kCLLocationAccuracyBest
+        manager.distanceFilter = lowPower ? 100 : 25
+    }
+
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
         authorizationStatus = manager.authorizationStatus
-        if manager.authorizationStatus == .authorizedAlways || manager.authorizationStatus == .authorizedWhenInUse {
+        if manager.authorizationStatus == .authorizedWhenInUse {
+            errorMessage = nil
+            manager.startUpdatingLocation()
+            requestAlwaysAuthorizationIfNeeded()
+        } else if manager.authorizationStatus == .authorizedAlways {
             errorMessage = nil
             manager.startUpdatingLocation()
         }
@@ -59,7 +72,7 @@ final class ActiveTripLocationService: NSObject, ObservableObject, CLLocationMan
 
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
         guard (error as? CLError)?.code != .locationUnknown else { return }
-        errorMessage = "Polohu se nepodařilo aktualizovat: \(error.localizedDescription)"
+        errorMessage = WaymintLocalization.format("Polohu se nepodařilo aktualizovat: %@", error.localizedDescription)
     }
 
     private func configureBackgroundUpdatesIfSupported() {
@@ -72,5 +85,11 @@ final class ActiveTripLocationService: NSObject, ObservableObject, CLLocationMan
         manager.allowsBackgroundLocationUpdates = supportsBackgroundLocation
         manager.showsBackgroundLocationIndicator = supportsBackgroundLocation
 #endif
+    }
+
+    private func requestAlwaysAuthorizationIfNeeded() {
+        guard !didRequestAlwaysAuthorization else { return }
+        didRequestAlwaysAuthorization = true
+        manager.requestAlwaysAuthorization()
     }
 }

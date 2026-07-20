@@ -9,21 +9,25 @@ struct TicketsOverviewView: View {
     @State private var editingTicket: TicketItem?
     @State private var previewURL: URL?
     @State private var showingFilePreview = false
+    @State private var showingNewTicket = false
     @State private var ticketToDelete: TicketItem?
     private let storage = TicketStorageService()
 
     var body: some View {
         ScrollView {
-            if trip.sortedTickets.isEmpty {
+            VStack(spacing: 14) {
+                ticketWalletHeader
+
+            if allTickets.isEmpty {
                 EmptyStateView(
                     systemImage: "ticket",
-                    title: "Zadne vstupenky",
-                    message: "Vstupenky muzes pridat v detailu zastavky nebo sem jako centralni polozku planu."
+                    title: "Žádné vstupenky",
+                    message: "Přidej PDF, obrázek, QR kód, čárový kód nebo odkaz a budeš ho mít během cesty rychle po ruce."
                 )
-                .frame(maxWidth: .infinity, minHeight: 320)
+                .frame(maxWidth: .infinity, minHeight: 240)
             } else {
                 LazyVStack(spacing: 14) {
-                    ForEach(trip.sortedTickets) { ticket in
+                    ForEach(allTickets) { ticket in
                         TicketRowView(
                             ticket: ticket,
                             onOpen: { open(ticket) },
@@ -32,8 +36,9 @@ struct TicketsOverviewView: View {
                         )
                     }
                 }
-                .padding(16)
             }
+            }
+            .padding(16)
         }
         .background(WaymintTheme.elevatedSurface)
         .sheet(item: $selectedTicket) { ticket in
@@ -55,7 +60,10 @@ struct TicketsOverviewView: View {
         .sheet(item: $editingTicket) { ticket in
             TicketFormView(trip: ticket.tripPlan, stop: ticket.stop, ticket: ticket)
         }
-        .sheet(isPresented: $showingFilePreview) {
+        .sheet(isPresented: $showingNewTicket) {
+            TicketFormView(trip: trip, stop: nil)
+        }
+        .fullScreenCover(isPresented: $showingFilePreview) {
             if let previewURL {
                 TicketFilePreview(url: previewURL)
             }
@@ -70,10 +78,47 @@ struct TicketsOverviewView: View {
                 editingTicket = nil
                 ticketToDelete = nil
             }
-            Button("Zrusit", role: .cancel) {
+            Button("Zrušit", role: .cancel) {
                 ticketToDelete = nil
             }
         }
+    }
+
+    private var ticketWalletHeader: some View {
+        HStack(spacing: 14) {
+            Image(systemName: "wallet.pass.fill")
+                .font(.title2)
+                .foregroundStyle(.white)
+                .frame(width: 48, height: 48)
+                .background(WaymintTheme.primaryGreen, in: RoundedRectangle(cornerRadius: 14))
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Peněženka vstupenek")
+                    .font(.headline)
+                Text(ticketCountText)
+                    .font(.caption)
+                    .foregroundStyle(WaymintTheme.secondaryText)
+            }
+            Spacer()
+            Button { showingNewTicket = true } label: {
+                Label("Přidat", systemImage: "plus")
+                    .labelStyle(.iconOnly)
+                    .font(.headline)
+                    .frame(width: 42, height: 42)
+            }
+            .buttonStyle(.borderedProminent)
+            .accessibilityLabel("Přidat vstupenku")
+        }
+        .padding(14)
+        .background(WaymintTheme.surface, in: RoundedRectangle(cornerRadius: 18))
+    }
+
+    private var ticketCountText: String {
+        let count = allTickets.count
+        return WaymintLocalization.format(count == 1 ? "%d vstupenka" : "%d vstupenek", count)
+    }
+
+    private var allTickets: [TicketItem] {
+        trip.allTickets
     }
 
     private var deleteConfirmationBinding: Binding<Bool> {
@@ -124,7 +169,8 @@ struct TicketRowView: View {
                         .lineLimit(2)
 
                     HStack(spacing: 8) {
-                        Text(ticket.ticketType.title.uppercased())
+                        Text(LocalizedStringKey(ticket.ticketType.title))
+                            .textCase(.uppercase)
                             .font(.caption2.weight(.bold))
                             .foregroundStyle(iconTint)
                             .padding(.horizontal, 8)
@@ -152,7 +198,7 @@ struct TicketRowView: View {
                     Image(systemName: ticket.ticketType == .pdf ? "doc.richtext" : "photo")
                         .foregroundStyle(iconTint)
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(ticket.ticketType == .pdf ? "Soubor ulozeny v aplikaci" : "Obrazek ulozeny v aplikaci")
+                        Text(ticket.ticketType == .pdf ? "Soubor uložený v aplikaci" : "Obrázek uložený v aplikaci")
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(WaymintTheme.primaryText)
                         Text(URL(filePath: localFilePath).lastPathComponent)
@@ -200,7 +246,7 @@ struct TicketRowView: View {
         .onTapGesture(perform: onOpen)
         .contextMenu {
             Button(action: onOpen) {
-                Label(actionTitle, systemImage: actionIcon)
+                Label { Text(LocalizedStringKey(actionTitle)) } icon: { Image(systemName: actionIcon) }
             }
             Button(action: onEdit) {
                 Label("Upravit", systemImage: "pencil")
@@ -235,10 +281,10 @@ struct TicketRowView: View {
 
     private var actionTitle: String {
         switch ticket.ticketType {
-        case .pdf: "Otevrit PDF"
+        case .pdf: "Otevřít PDF"
         case .image, .qrCode, .barcode: "Zobrazit"
         case .textCode: "Detail"
-        case .link: "Otevrit"
+        case .link: "Otevřít"
         }
     }
 
@@ -260,7 +306,7 @@ private struct TicketActionButton: View {
 
     var body: some View {
         Button(action: action) {
-            Label(title, systemImage: systemImage)
+            Label { Text(LocalizedStringKey(title)) } icon: { Image(systemName: systemImage) }
                 .font(.caption2.weight(.semibold))
                 .lineLimit(1)
                 .minimumScaleFactor(0.75)
@@ -286,7 +332,7 @@ struct TicketDetailView: View {
 
                 if let code = ticket.code, !code.isEmpty {
                     VStack(alignment: .leading, spacing: 10) {
-                        Text(ticket.ticketType == .link ? "Odkaz" : "Kod")
+                        Text(ticket.ticketType == .link ? "Odkaz" : "Kód")
                             .font(.headline)
                         TicketCodePanel(code: code)
                     }
@@ -306,7 +352,7 @@ struct TicketDetailView: View {
 
                 if !ticket.note.isEmpty {
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("Poznamka")
+                        Text("Poznámka")
                             .font(.headline)
                         Text(ticket.note)
                             .foregroundStyle(WaymintTheme.secondaryText)
@@ -333,12 +379,28 @@ struct TicketDetailView: View {
 
 private struct TicketCodePanel: View {
     let code: String
+    @State private var copied = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Kod vstupenky")
-                .font(.caption2.weight(.bold))
-                .foregroundStyle(WaymintTheme.secondaryText)
+            HStack {
+                Text("Kód vstupenky")
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(WaymintTheme.secondaryText)
+                Spacer()
+                Button {
+                    UIPasteboard.general.string = code
+                    copied = true
+                    Task {
+                        try? await Task.sleep(for: .seconds(1.5))
+                        copied = false
+                    }
+                } label: {
+                    Label(copied ? "Zkopírováno" : "Kopírovat", systemImage: copied ? "checkmark" : "doc.on.doc")
+                        .font(.caption.weight(.semibold))
+                }
+                .buttonStyle(.plain)
+            }
             Text(code)
                 .font(.system(.title3, design: .monospaced).weight(.semibold))
                 .foregroundStyle(WaymintTheme.primaryText)

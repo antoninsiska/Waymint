@@ -5,6 +5,7 @@ import UIKit
 struct TicketFilePreview: View {
     @Environment(\.dismiss) private var dismiss
     let url: URL
+    @State private var previousBrightness: CGFloat?
 
     var body: some View {
         NavigationStack {
@@ -30,6 +31,15 @@ struct TicketFilePreview: View {
                         dismiss()
                     }
                 }
+            }
+        }
+        .onAppear {
+            previousBrightness = UIScreen.main.brightness
+            UIScreen.main.brightness = 1
+        }
+        .onDisappear {
+            if let previousBrightness {
+                UIScreen.main.brightness = previousBrightness
             }
         }
     }

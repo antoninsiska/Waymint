@@ -11,19 +11,19 @@ enum PlaceBankDeduplicator {
         place: PlaceBankItem
     ) -> Bool {
         let incomingAddress = normalized(address)
+        let incomingTitle = normalized(title)
+        let sameTitle = !incomingTitle.isEmpty && incomingTitle == normalized(place.title)
+        guard sameTitle else { return false }
+
         if !incomingAddress.isEmpty, incomingAddress == normalized(place.address) { return true }
 
-        var isNearby = false
         if let latitude, let longitude,
            let placeLatitude = place.latitude, let placeLongitude = place.longitude {
             let distance = CLLocation(latitude: latitude, longitude: longitude)
                 .distance(from: CLLocation(latitude: placeLatitude, longitude: placeLongitude))
-            isNearby = distance <= 60
-            if isNearby { return true }
+            if distance <= 30 { return true }
         }
 
-        let incomingTitle = normalized(title)
-        let sameTitle = !incomingTitle.isEmpty && incomingTitle == normalized(place.title)
         let neitherHasLocation = latitude == nil && longitude == nil && place.latitude == nil && place.longitude == nil
         let neitherHasAddress = incomingAddress.isEmpty && normalized(place.address).isEmpty
         return sameTitle && neitherHasLocation && neitherHasAddress

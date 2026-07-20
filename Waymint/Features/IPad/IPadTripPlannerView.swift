@@ -14,6 +14,10 @@ struct IPadTripPlannerView: View {
     @State private var exportedWayFile: ExportedWayFile?
     @State private var exportErrorMessage = ""
     @State private var showingExportError = false
+    @State private var showingActiveTrip = false
+    @State private var showingReadiness = false
+    @State private var showingAssistant = false
+    @State private var showingStartTimingDecision = false
     @State private var sidePanelMode = IPadPlannerSidePanelMode.detail
     @AppStorage("waymintIPadTimelinePanelWidth") private var timelinePanelWidth = 332.0
 
@@ -36,7 +40,14 @@ struct IPadTripPlannerView: View {
             IPadTripPlannerHeader(trip: trip)
 
             if columnVisibility != .detailOnly {
-                IPadTripOverviewView(trip: trip)
+                IPadTripOverviewView(
+                    trip: trip,
+                    selectedStopID: $selectedStopID,
+                    onOpenPlanner: { columnVisibility = .detailOnly },
+                    onAddStop: { showingNewStop = true },
+                    onEditTrip: { showingTripSettings = true },
+                    onOpenAssistant: { showingAssistant = true }
+                )
             } else if stops.isEmpty {
                 IPadEmptyPlannerState {
                     showingNewStop = true
@@ -81,8 +92,8 @@ struct IPadTripPlannerView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItemGroup(placement: .topBarTrailing) {
-                NavigationLink {
-                    ActiveTripView(trip: trip)
+                Button {
+                    requestTripStart()
                 } label: {
                     Label("Spustit", systemImage: "play.fill")
                 }
@@ -109,7 +120,7 @@ struct IPadTripPlannerView: View {
                                 )
                         }
                         .buttonStyle(.plain)
-                        .accessibilityLabel(mode.title)
+                        .accessibilityLabel(Text(LocalizedStringKey(mode.title)))
                     }
                 }
                 .padding(3)
@@ -155,6 +166,30 @@ struct IPadTripPlannerView: View {
                 WaymintFileActivityItem(url: file.url, title: "Waymint \(trip.title)")
             ])
         }
+        .sheet(isPresented: $showingReadiness) {
+            TripReadinessView(trip: trip) {
+                showingReadiness = false
+                showingActiveTrip = true
+            }
+        }
+        .sheet(isPresented: $showingAssistant) {
+            TripAssistantView(trip: trip)
+        }
+        .navigationDestination(isPresented: $showingActiveTrip) {
+            ActiveTripView(trip: trip)
+        }
+        .confirmationDialog("Plánovaný čas nesouhlasí", isPresented: $showingStartTimingDecision, titleVisibility: .visible) {
+            Button("Přesunout plán na teď") {
+                TripStartTimingService().movePlanToNow(trip)
+                continueTripStart()
+            }
+            Button("Spustit podle původního plánu") { continueTripStart() }
+            Button("Zpět do plánování") { showingTripSettings = true }
+            Button("Zrušit", role: .cancel) {}
+        } message: {
+            let planned = TripStartTimingService().plannedStart(for: trip)
+            Text(WaymintLocalization.format("Cesta je naplánovaná na %@ v %@, ale teď je %@ v %@. Jak ji chceš spustit?", trip.date.waymintDate, planned.waymintTime, Date().waymintDate, Date().waymintTime))
+        }
         .alert("Export se nepovedl", isPresented: $showingExportError) {
             Button("OK", role: .cancel) {}
         } message: {
@@ -169,6 +204,22 @@ struct IPadTripPlannerView: View {
             stop.sortIndex = index
         }
         scheduleCalculator.reconnectAndRecalculate(trip)
+    }
+
+    private func requestTripStart() {
+        if TripStartTimingService().needsConfirmation(for: trip) {
+            showingStartTimingDecision = true
+        } else {
+            continueTripStart()
+        }
+    }
+
+    private func continueTripStart() {
+        if TripReadinessChecker.issues(for: trip).isEmpty {
+            showingActiveTrip = true
+        } else {
+            showingReadiness = true
+        }
     }
 
     private func deleteStops(at offsets: IndexSet) {
@@ -200,15 +251,105 @@ struct IPadTripPlannerView: View {
 
 private struct IPadTripOverviewView: View {
     let trip: TripPlan
+    @Binding var selectedStopID: UUID?
+    let onOpenPlanner: () -> Void
+    let onAddStop: () -> Void
+    let onEditTrip: () -> Void
+    let onOpenAssistant: () -> Void
+
+    private var issues: [TripReadinessIssue] {
+        TripReadinessChecker.issues(for: trip)
+    }
+
+    private var travelMinutes: Int {
+        trip.sortedTravelSegments.reduce(0) { result, segment in
+            result + max(0, segment.plannedDurationMinutes + segment.bufferMinutes)
+        }
+    }
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
+                HStack(alignment: .top, spacing: 18) {
+                    VStack(alignment: .leading, spacing: 7) {
+                        Text("Příprava cesty")
+                            .font(.system(.title2, design: .rounded).weight(.bold))
+                        Text(issues.isEmpty
+                             ? "Plán je připravený. Můžeš ještě projít pořadí míst nebo otevřít podrobný plánovač."
+                             : WaymintLocalization.format("Před cestou zbývá zkontrolovat %d problémů.", issues.count))
+                            .font(.subheadline)
+                            .foregroundStyle(WaymintTheme.secondaryText)
+                    }
+                    Spacer()
+                    StatusPill(
+                        issues.isEmpty ? "Připravená" : "Vyžaduje kontrolu",
+                        systemImage: issues.isEmpty ? "checkmark.shield.fill" : "exclamationmark.triangle.fill",
+                        tint: issues.isEmpty ? WaymintTheme.success : WaymintTheme.warning
+                    )
+                }
+                .padding(18)
+                .background(
+                    (issues.isEmpty ? WaymintTheme.lightGreen : WaymintTheme.warning.opacity(0.12)),
+                    in: RoundedRectangle(cornerRadius: WaymintTheme.cornerRadius)
+                )
+
+                HStack(spacing: 10) {
+                    Button(action: onOpenPlanner) {
+                        Label("Otevřít plánovač", systemImage: "rectangle.split.3x1")
+                    }
+                    .buttonStyle(.borderedProminent)
+
+                    Button(action: onAddStop) {
+                        Label("Přidat zastávku", systemImage: "plus")
+                    }
+                    .buttonStyle(.bordered)
+
+                    Button(action: onEditTrip) {
+                        Label("Datum a čas", systemImage: "calendar")
+                    }
+                    .buttonStyle(.bordered)
+
+                    Button(action: onOpenAssistant) {
+                        Label("Kontrola a offline", systemImage: "checkmark.shield")
+                    }
+                    .buttonStyle(.bordered)
+                }
+
                 HStack(spacing: 12) {
                     overviewMetric("Čas", value: trip.scheduleLabel, systemImage: "clock")
                     overviewMetric("Zastávky", value: "\(trip.stopCount)", systemImage: "mappin.and.ellipse")
-                    overviewMetric("Vstupenky", value: "\(trip.ticketCount)", systemImage: "ticket")
-                    overviewMetric("Stav", value: trip.status.title, systemImage: "flag")
+                    overviewMetric("Přesuny", value: travelMinutes.minutesLabel, systemImage: "arrow.triangle.swap")
+                    overviewMetric("Vstupenky", value: "\(trip.totalTicketCount)", systemImage: "ticket")
+                }
+
+                if !issues.isEmpty {
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack {
+                            Label("Co je potřeba zkontrolovat", systemImage: "exclamationmark.triangle.fill")
+                                .font(.headline)
+                                .foregroundStyle(WaymintTheme.warning)
+                            Spacer()
+                            Button("Otevřít kontrolu", action: onOpenAssistant)
+                                .font(.subheadline.weight(.semibold))
+                        }
+                        ForEach(issues.prefix(4)) { issue in
+                            HStack(alignment: .top, spacing: 11) {
+                                Image(systemName: issue.systemImage)
+                                    .foregroundStyle(WaymintTheme.warning)
+                                    .frame(width: 24)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(issue.title)
+                                        .font(.subheadline.weight(.semibold))
+                                    Text(issue.detail)
+                                        .font(.caption)
+                                        .foregroundStyle(WaymintTheme.secondaryText)
+                                }
+                                Spacer()
+                            }
+                        }
+                    }
+                    .padding(16)
+                    .background(WaymintTheme.surface, in: RoundedRectangle(cornerRadius: WaymintTheme.cornerRadius))
                 }
 
                 if !trip.landingTitle.isEmpty || !trip.landingSubtitle.isEmpty || !trip.note.isEmpty {
@@ -236,7 +377,7 @@ private struct IPadTripOverviewView: View {
                 }
 
                 if !trip.sortedStops.isEmpty {
-                    IPadDayBoardView(trip: trip, selectedStopID: .constant(nil))
+                    IPadDayBoardView(trip: trip, selectedStopID: $selectedStopID)
 
                     VStack(alignment: .leading, spacing: 12) {
                         Label("Program cesty", systemImage: "list.bullet.rectangle")
@@ -251,7 +392,10 @@ private struct IPadTripOverviewView: View {
                                 VStack(alignment: .leading, spacing: 3) {
                                     Text(stop.title)
                                         .font(.subheadline.weight(.semibold))
-                                    Text("\(stop.plannedArrival.waymintTime) · \(stop.stopType.title)")
+                                    HStack(spacing: 3) {
+                                        Text(stop.plannedArrival.waymintTime + " ·")
+                                        Text(LocalizedStringKey(stop.stopType.title))
+                                    }
                                         .font(.caption)
                                         .foregroundStyle(WaymintTheme.secondaryText)
                                 }
@@ -274,7 +418,7 @@ private struct IPadTripOverviewView: View {
 
     private func overviewMetric(_ title: String, value: String, systemImage: String) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Label(title, systemImage: systemImage)
+            Label { Text(LocalizedStringKey(title)) } icon: { Image(systemName: systemImage) }
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(WaymintTheme.secondaryText)
             Text(value)
@@ -400,7 +544,7 @@ struct PhoneLandscapeTripPlannerView: View {
                             )
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel(mode.title)
+                    .accessibilityLabel(Text(LocalizedStringKey(mode.title)))
                 }
             }
             .padding(2)
@@ -517,8 +661,10 @@ private struct IPadTripPlannerHeader: View {
             Spacer()
 
             Label(trip.scheduleLabel, systemImage: "clock")
-            Label("\(trip.stopCount) míst", systemImage: "mappin.and.ellipse")
-            Label("\(trip.ticketCount) vstupenek", systemImage: "ticket")
+            Label(WaymintLocalization.format("%d míst", trip.stopCount), systemImage: "mappin.and.ellipse")
+            if trip.totalTicketCount > 0 {
+                Label(WaymintLocalization.format("%d vstupenek", trip.totalTicketCount), systemImage: "ticket")
+            }
             StatusPill(trip.status.title, systemImage: "flag", tint: WaymintTheme.primaryGreen)
         }
         .font(.subheadline.weight(.semibold))
@@ -644,10 +790,14 @@ private struct IPadTimelineSegmentRow: View {
                         }
 
                         HStack(spacing: 10) {
-                            Label(segment?.transportMode.title ?? "Přesun", systemImage: segment?.transportMode.systemImage ?? "arrow.right")
+                            Label {
+                                Text(LocalizedStringKey(segment?.transportMode.title ?? "Přesun"))
+                            } icon: {
+                                Image(systemName: segment?.transportMode.systemImage ?? "arrow.right")
+                            }
                             Text(showsClockTimes ? "\(from.plannedDeparture.waymintTime) → \(to.plannedArrival.waymintTime)" : "Po předchozí zastávce")
                             if let buffer = segment?.bufferMinutes, buffer > 0 {
-                                Text("+ \(buffer.minutesLabel) rezerva")
+                                Text(WaymintLocalization.format("+ %@ rezerva", buffer.minutesLabel))
                             }
                         }
                         .font(.caption)
@@ -780,9 +930,9 @@ private struct IPadTimelineStopRow: View {
                     .accessibilityLabel("Začátek cesty")
             } else {
                 Label("\(stop.plannedVisitDurationMinutes)", systemImage: "timer")
-                    .accessibilityLabel("Na místě \(stop.plannedVisitDurationMinutes) minut")
+                    .accessibilityLabel(WaymintLocalization.format("Na místě %d minut", stop.plannedVisitDurationMinutes))
                 Label("\(inboundTravelMinutes)", systemImage: "arrow.right")
-                    .accessibilityLabel("Dojezd \(inboundTravelMinutes) minut")
+                    .accessibilityLabel(WaymintLocalization.format("Dojezd %d minut", inboundTravelMinutes))
             }
             Image(systemName: stop.isRequired ? "exclamationmark.circle" : "circle")
                 .accessibilityLabel(stop.isRequired ? "Povinná" : "Volitelná")
@@ -797,7 +947,7 @@ private struct IPadTimelineStopRow: View {
         if showsClockTimes {
             return isStart ? stop.plannedDeparture.waymintTime : stop.plannedArrival.waymintTime
         }
-        return isStart ? "Start" : "Bod \(index)"
+        return isStart ? WaymintLocalization.text("Start") : WaymintLocalization.format("Bod %d", index)
     }
 }
 
@@ -888,14 +1038,14 @@ private struct IPadBoardStopBlock: View {
         if showsClockTimes {
             return index == 0 ? "Start" : stop.plannedArrival.waymintTime
         }
-        return index == 0 ? "Start" : "Bod \(index + 1)"
+        return index == 0 ? WaymintLocalization.text("Start") : WaymintLocalization.format("Bod %d", index + 1)
     }
 
     private var subtitleLabel: String {
         if showsClockTimes {
             return index == 0 ? stop.plannedDeparture.waymintTime : stop.plannedVisitDurationMinutes.minutesLabel
         }
-        return index == 0 ? "Bez pevného času" : stop.plannedVisitDurationMinutes.minutesLabel
+        return index == 0 ? WaymintLocalization.text("Bez pevného času") : stop.plannedVisitDurationMinutes.minutesLabel
     }
 }
 
@@ -1015,9 +1165,9 @@ private struct IPadStopInspector: View {
                         IPadInspectorCard(title: "Čas", systemImage: "clock") {
                             VStack(alignment: .leading, spacing: 8) {
                                 Label(timeLabel(for: stop), systemImage: trip.hasFixedStartTime ? "calendar" : "timer")
-                                Label("Na místě \(stop.plannedVisitDurationMinutes.minutesLabel)", systemImage: "timer")
+                                Label(WaymintLocalization.format("Na místě %@", stop.plannedVisitDurationMinutes.minutesLabel), systemImage: "timer")
                                 if let segment = trip.travelSegments?.first(where: { $0.toStopID == stop.id }) {
-                                    Label("Dojezd \(max(0, segment.plannedDurationMinutes + segment.bufferMinutes).minutesLabel)", systemImage: segment.transportMode.systemImage)
+                                    Label(WaymintLocalization.format("Dojezd %@", max(0, segment.plannedDurationMinutes + segment.bufferMinutes).minutesLabel), systemImage: segment.transportMode.systemImage)
                                 }
                             }
                             .font(.subheadline)
@@ -1061,12 +1211,12 @@ private struct IPadStopInspector: View {
 
                         IPadInspectorCard(title: "Vstupenky", systemImage: "ticket") {
                             VStack(alignment: .leading, spacing: 10) {
-                                if stop.sortedTickets.isEmpty {
+                                if stop.sortedTickets.filter(\.isUsableTicket).isEmpty {
                                     Text("K tomuto místu nejsou vstupenky.")
                                         .font(.subheadline)
                                         .foregroundStyle(WaymintTheme.secondaryText)
                                 } else {
-                                    ForEach(stop.sortedTickets) { ticket in
+                                    ForEach(stop.sortedTickets.filter(\.isUsableTicket)) { ticket in
                                         Label(ticket.title, systemImage: ticket.ticketType == .pdf ? "doc.richtext" : "ticket")
                                             .font(.subheadline.weight(.semibold))
                                     }
@@ -1111,7 +1261,7 @@ private struct IPadInspectorCard<Content: View>: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Label(title, systemImage: systemImage)
+            Label { Text(LocalizedStringKey(title)) } icon: { Image(systemName: systemImage) }
                 .font(.headline)
                 .foregroundStyle(WaymintTheme.primaryText)
             content

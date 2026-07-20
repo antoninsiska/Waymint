@@ -14,14 +14,14 @@ enum TransportMode: String, CaseIterable, Identifiable, Codable {
 
     var title: String {
         switch self {
-        case .walking: "Pesky"
+        case .walking: "Pěšky"
         case .publicTransport: "MHD"
         case .car: "Auto"
         case .taxi: "Taxi"
         case .train: "Vlak"
         case .bike: "Kolo"
-        case .boat: "Lod"
-        case .other: "Jine"
+        case .boat: "Loď"
+        case .other: "Jiné"
         }
     }
 

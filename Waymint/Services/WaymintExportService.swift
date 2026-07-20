@@ -68,6 +68,18 @@ struct WaymintExportService {
         return url
     }
 
+    func exportDiagnostics(cities: [CityPlan]) throws -> URL {
+        let trips = cities.flatMap(\.sortedTripPlans)
+        let payload = WaymintDiagnosticsExport(trips: trips)
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("Waymint-diagnostika-\(Date().waymintBackupStamp).json")
+        try encoder.encode(payload).write(to: url, options: .atomic)
+        return url
+    }
+
     func importTrip(from url: URL, nextSortIndex: Int) throws -> TripPlan {
         let didStartAccessing = url.startAccessingSecurityScopedResource()
         defer {
@@ -106,6 +118,57 @@ struct WaymintExportService {
             .replacingOccurrences(of: "‟", with: "\"")
 
         return Data(text.utf8)
+    }
+}
+
+private struct WaymintDiagnosticsExport: Encodable {
+    struct Trip: Encodable {
+        struct Stop: Encodable {
+            let number: Int
+            let status: String
+            let plannedArrival: Date
+            let plannedDeparture: Date
+            let actualStart: Date?
+            let actualEnd: Date?
+            let hasCoordinate: Bool
+            let isTimeAnchor: Bool
+        }
+        let number: Int
+        let status: String
+        let fixedStart: Bool
+        let actualStartedAt: Date?
+        let actualEndedAt: Date?
+        let pauseSeconds: Double
+        let stops: [Stop]
+        let travelDurations: [Int]
+        let eventHistory: [String]
+    }
+
+    let format = "waymint.diagnostics"
+    let version = 1
+    let exportedAt = Date()
+    let trips: [Trip]
+
+    init(trips source: [TripPlan]) {
+        trips = source.enumerated().map { tripIndex, trip in
+            let replacements = Dictionary(uniqueKeysWithValues: trip.sortedStops.enumerated().map { ($0.element.title, "Stop \($0.offset + 1)") })
+            let history = trip.scheduleChangeHistoryText.components(separatedBy: .newlines).map { line in
+                replacements.reduce(line) { text, value in text.replacingOccurrences(of: value.key, with: value.value) }
+            }
+            return Trip(
+                number: tripIndex + 1,
+                status: trip.status.rawValue,
+                fixedStart: trip.hasFixedStartTime,
+                actualStartedAt: trip.actualStartedAt,
+                actualEndedAt: trip.actualEndedAt,
+                pauseSeconds: trip.accumulatedPauseSeconds,
+                stops: trip.sortedStops.enumerated().map { index, stop in
+                    .init(number: index + 1, status: stop.status.rawValue, plannedArrival: stop.plannedArrival, plannedDeparture: stop.plannedDeparture, actualStart: stop.actualStart, actualEnd: stop.actualEnd, hasCoordinate: stop.coordinateIsValid, isTimeAnchor: stop.isTimeAnchor)
+                },
+                travelDurations: trip.sortedTravelSegments.map(\.plannedDurationMinutes),
+                eventHistory: history
+            )
+        }
     }
 }
 
@@ -218,6 +281,10 @@ private struct WaymintExportTrip: Encodable {
     let hasFixedStartTime: Bool
     let actualStartedAt: Date?
     let actualEndedAt: Date?
+    let pausedAt: Date?
+    let accumulatedPauseSeconds: Double
+    let offlinePreparedAt: Date?
+    let delayResponseStrategy: String
     let status: String
     let sortIndex: Int
     let timeRangeLabel: String
@@ -241,6 +308,10 @@ private struct WaymintExportTrip: Encodable {
         self.hasFixedStartTime = trip.hasFixedStartTime
         self.actualStartedAt = trip.actualStartedAt
         self.actualEndedAt = trip.actualEndedAt
+        self.pausedAt = trip.pausedAt
+        self.accumulatedPauseSeconds = trip.accumulatedPauseSeconds
+        self.offlinePreparedAt = trip.offlinePreparedAt
+        self.delayResponseStrategy = trip.delayResponseStrategy.rawValue
         self.status = trip.status.rawValue
         self.sortIndex = trip.sortIndex
         self.timeRangeLabel = trip.timeRangeLabel
@@ -271,6 +342,8 @@ private struct WaymintExportStop: Encodable {
     let mainReason: String
     let isRequired: Bool
     let sortIndex: Int
+    let sourceBankPlaceID: UUID?
+    let isTimeAnchor: Bool
     let checklist: [WaymintExportChecklistItem]
     let tickets: [WaymintExportTicket]
 
@@ -289,6 +362,8 @@ private struct WaymintExportStop: Encodable {
         self.mainReason = stop.mainReason
         self.isRequired = stop.isRequired
         self.sortIndex = stop.sortIndex
+        self.sourceBankPlaceID = stop.sourceBankPlaceID
+        self.isTimeAnchor = stop.isTimeAnchor
         self.checklist = stop.sortedChecklistItems.map(WaymintExportChecklistItem.init)
         self.tickets = stop.sortedTickets.map(WaymintExportTicket.init)
     }
@@ -404,6 +479,10 @@ private struct WaymintImportTrip: Decodable {
     let hasFixedStartTime: Bool?
     let actualStartedAt: Date?
     let actualEndedAt: Date?
+    let pausedAt: Date?
+    let accumulatedPauseSeconds: Double?
+    let offlinePreparedAt: Date?
+    let delayResponseStrategy: String?
     let status: String
     let landingTitle: String
     let landingSubtitle: String
@@ -430,6 +509,8 @@ private struct WaymintImportStop: Decodable {
     let mainReason: String
     let isRequired: Bool
     let sortIndex: Int
+    let sourceBankPlaceID: UUID?
+    let isTimeAnchor: Bool?
     let checklist: [WaymintImportChecklistItem]
     let tickets: [WaymintImportTicket]
 }
@@ -498,6 +579,10 @@ private extension TripPlan {
             hasFixedStartTime: trip.hasFixedStartTime ?? true,
             actualStartedAt: trip.actualStartedAt,
             actualEndedAt: trip.actualEndedAt,
+            pausedAt: trip.pausedAt,
+            accumulatedPauseSeconds: trip.accumulatedPauseSeconds ?? 0,
+            offlinePreparedAt: trip.offlinePreparedAt,
+            delayResponseStrategy: DelayResponseStrategy(rawValue: trip.delayResponseStrategy ?? "") ?? .shiftEverything,
             status: TripPlanStatus(rawValue: trip.status) ?? .draft,
             sortIndex: sortIndex,
             landingTitle: trip.landingTitle,
@@ -609,7 +694,9 @@ private extension TripStop {
             note: stop.note,
             mainReason: stop.mainReason,
             isRequired: stop.isRequired,
-            sortIndex: stop.sortIndex
+            sortIndex: stop.sortIndex,
+            sourceBankPlaceID: stop.sourceBankPlaceID,
+            isTimeAnchor: stop.isTimeAnchor ?? false
         )
 
         for importedChecklistItem in stop.checklist.sorted(by: { $0.sortIndex < $1.sortIndex }) {

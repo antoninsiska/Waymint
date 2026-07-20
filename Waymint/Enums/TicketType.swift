@@ -13,10 +13,10 @@ enum TicketType: String, CaseIterable, Identifiable, Codable {
     var title: String {
         switch self {
         case .pdf: "PDF"
-        case .image: "Obrazek"
-        case .qrCode: "QR kod"
-        case .barcode: "Carovy kod"
-        case .textCode: "Textovy kod"
+        case .image: "Obrázek"
+        case .qrCode: "QR kód"
+        case .barcode: "Čárový kód"
+        case .textCode: "Textový kód"
         case .link: "Odkaz"
         }
     }

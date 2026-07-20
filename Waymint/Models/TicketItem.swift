@@ -39,4 +39,16 @@ final class TicketItem {
         get { TicketType(rawValue: ticketTypeRawValue) ?? .textCode }
         set { ticketTypeRawValue = newValue.rawValue }
     }
+
+    var isUsableTicket: Bool {
+        switch ticketType {
+        case .textCode:
+            return !(code?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
+        case .link:
+            let value = externalURLString ?? code
+            return !(value?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
+        case .pdf, .image, .qrCode, .barcode:
+            return !(localFilePath?.isEmpty ?? true)
+        }
+    }
 }

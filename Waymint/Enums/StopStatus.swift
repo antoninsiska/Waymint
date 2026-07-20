@@ -12,13 +12,12 @@ enum StopStatus: String, CaseIterable, Identifiable, Codable {
 
     var title: String {
         switch self {
-        case .planned: "Planovana"
-        case .next: "Nasledujici"
-        case .active: "Probiha"
-        case .completed: "Dokoncena"
-        case .skipped: "Preskocena"
-        case .delayed: "Zpozdena"
+        case .planned: "Plánovaná"
+        case .next: "Následující"
+        case .active: "Probíhá"
+        case .completed: "Dokončená"
+        case .skipped: "Přeskočená"
+        case .delayed: "Zpožděná"
         }
     }
 }
-

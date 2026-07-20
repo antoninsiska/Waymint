@@ -28,7 +28,9 @@ final class TravelSegment {
     ) {
         self.id = id
         self.transportModeRawValue = transportMode.rawValue
-        self.plannedDurationMinutes = plannedDurationMinutes
+        self.plannedDurationMinutes = (fromStopID != nil || toStopID != nil)
+            ? max(1, plannedDurationMinutes)
+            : max(0, plannedDurationMinutes)
         self.plannedDeparture = plannedDeparture
         self.bufferMinutes = bufferMinutes
         self.fromStopID = fromStopID

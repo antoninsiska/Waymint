@@ -48,28 +48,28 @@ struct TicketFormView: View {
                 Section("Typ vstupenky") {
                     Picker("Typ", selection: $ticketType) {
                         ForEach(TicketType.allCases) { type in
-                            Label(type.title, systemImage: icon(for: type)).tag(type)
+                            Label { Text(LocalizedStringKey(type.title)) } icon: { Image(systemName: icon(for: type)) }.tag(type)
                         }
                     }
                     .pickerStyle(.navigationLink)
                 }
 
                 Section("Vstupenka") {
-                    TextField("Nazev", text: $title)
+                    TextField("Název vstupenky", text: $title)
 
                     switch ticketType {
                     case .pdf:
                         Button {
                             showingPDFImporter = true
                         } label: {
-                            Label(localFilePath == nil ? "Vybrat PDF soubor" : "PDF vybrano", systemImage: "doc")
+                            Label(localFilePath == nil ? "Vybrat PDF soubor" : "PDF vybráno", systemImage: "doc")
                         }
                     case .image, .qrCode, .barcode:
                         PhotosPicker(selection: $selectedPhoto, matching: .images) {
-                            Label(localFilePath == nil ? "Vybrat obrazek z galerie" : "Obrazek vybran", systemImage: "photo")
+                            Label(localFilePath == nil ? "Vybrat obrázek z galerie" : "Obrázek vybrán", systemImage: "photo")
                         }
                     case .textCode, .link:
-                        TextField(ticketType == .link ? "Odkaz" : "Kod", text: $code, axis: .vertical)
+                        TextField(ticketType == .link ? "Odkaz" : "Kód", text: $code, axis: .vertical)
                             .textInputAutocapitalization(.never)
                             .autocorrectionDisabled()
                             .lineLimit(2...5)
@@ -88,18 +88,18 @@ struct TicketFormView: View {
                     }
                 }
 
-                Section("Poznamka") {
-                    TextField("Volitelna poznamka", text: $note, axis: .vertical)
+                Section("Poznámka") {
+                    TextField("Volitelná poznámka", text: $note, axis: .vertical)
                         .lineLimit(2...5)
                 }
             }
-            .navigationTitle(ticket == nil ? "Nova vstupenka" : "Upravit vstupenku")
+            .navigationTitle(Text(LocalizedStringKey(ticket == nil ? "Nová vstupenka" : "Upravit vstupenku")))
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Zrusit") { dismiss() }
+                    Button("Zrušit") { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Ulozit", action: save)
+                    Button("Uložit", action: save)
                         .disabled(!canSave)
                 }
             }
@@ -138,7 +138,7 @@ struct TicketFormView: View {
             }
             errorMessage = nil
         } catch {
-            errorMessage = "Soubor se nepodarilo ulozit lokalne."
+            errorMessage = "Soubor se nepodařilo uložit lokálně."
         }
     }
 
@@ -146,7 +146,7 @@ struct TicketFormView: View {
         Task {
             do {
                 guard let data = try await item.loadTransferable(type: Data.self) else {
-                    errorMessage = "Obrazek se nepodarilo nacist."
+                    errorMessage = "Obrázek se nepodařilo načíst."
                     return
                 }
 
@@ -157,7 +157,7 @@ struct TicketFormView: View {
                 }
                 errorMessage = nil
             } catch {
-                errorMessage = "Obrazek se nepodarilo ulozit lokalne."
+                errorMessage = "Obrázek se nepodařilo uložit lokálně."
             }
         }
     }
@@ -200,9 +200,9 @@ struct TicketFormView: View {
 
     private var defaultTitle: String {
         switch ticketType {
-        case .qrCode: "QR kod"
-        case .barcode: "Carovy kod"
-        case .image: "Obrazek vstupenky"
+        case .qrCode: "QR kód"
+        case .barcode: "Čárový kód"
+        case .image: "Obrázek vstupenky"
         default: ticketType.title
         }
     }
@@ -229,7 +229,8 @@ private struct TicketFormPreview: View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 5) {
-                    Text(type.title.uppercased())
+                    Text(LocalizedStringKey(type.title))
+                        .textCase(.uppercase)
                         .font(.caption2.weight(.bold))
                         .foregroundStyle(.white.opacity(0.72))
                     Text(title)
@@ -247,7 +248,7 @@ private struct TicketFormPreview: View {
                 .overlay(.white.opacity(0.24))
 
             HStack {
-                Label(statusText, systemImage: statusIcon)
+                Label { Text(LocalizedStringKey(statusText)) } icon: { Image(systemName: statusIcon) }
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.white.opacity(0.9))
                 Spacer()
@@ -284,9 +285,9 @@ private struct TicketFormPreview: View {
     private var statusText: String {
         switch type {
         case .pdf, .image, .qrCode, .barcode:
-            hasAttachment ? "Soubor pripraveny" : "Ceka na nahrani"
+            hasAttachment ? "Soubor připravený" : "Čeká na nahrání"
         case .textCode, .link:
-            code.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Ceka na kod" : "Kod pripraveny"
+            code.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Čeká na kód" : "Kód připravený"
         }
     }
 

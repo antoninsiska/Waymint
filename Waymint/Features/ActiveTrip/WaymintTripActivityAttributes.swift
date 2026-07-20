@@ -6,6 +6,7 @@ struct WaymintTripActivityAttributes: ActivityAttributes {
         var currentStopName: String
         var nextStopName: String?
         var phaseTitle: String
+        var languageCode: String
         var remainingMinutes: Int
         var targetDate: Date
         var plannedDeparture: Date?
